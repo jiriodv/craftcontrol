@@ -5,7 +5,7 @@
 ### 1. Naklonuj repozitář
 ```bash
 cd /opt  # nebo jiná složka dle tvého výběru
-git clone https://github.com/JirkaOdv/sprava_docker_minecraft_serveru.git
+git clone https://github.com/jiriodv/sprava_docker_minecraft_serveru.git
 cd sprava_docker_minecraft_serveru
 ```
 
@@ -230,7 +230,7 @@ ls -la /cesta/k/minecraft/logs/latest.log
 ```bash
 # 1. Příprava
 cd /opt
-git clone https://github.com/JirkaOdv/sprava_docker_minecraft_serveru.git
+git clone https://github.com/jiriodv/sprava_docker_minecraft_serveru.git
 cd sprava_docker_minecraft_serveru
 
 # 2. Konfigurace

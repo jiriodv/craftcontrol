@@ -7,7 +7,7 @@
 cd /home/Docker/MC
 
 # Naklonuj repozitář (pokud jsi to ještě neudělal)
-git clone https://github.com/JirkaOdv/sprava_docker_minecraft_serveru.git mc-panel
+git clone https://github.com/jiriodv/sprava_docker_minecraft_serveru.git mc-panel
 
 # Vytvoř složku pro databázi
 mkdir -p mc-panel/data

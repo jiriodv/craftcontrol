@@ -28,13 +28,13 @@ A modern, feature-rich web panel for managing Minecraft servers with RCON and SS
 
 ```bash
 # Pull the pre-built image
-docker pull jirka5522/mc-server-boss:latest
+docker pull jiriodv/mc-server-boss:latest
 
 # Run with docker-compose
 cat > docker-compose.yml << 'EOF'
 services:
   mc-panel:
-    image: jirka5522/mc-server-boss:latest
+    image: jiriodv/mc-server-boss:latest
     container_name: mc-panel
     ports:
       - "5050:5000"
@@ -55,7 +55,7 @@ docker-compose up -d
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/JirkaOdv/sprava_docker_minecraft_serveru.git
+   git clone https://github.com/jiriodv/sprava_docker_minecraft_serveru.git
    cd sprava_docker_minecraft_serveru
    ```
 
@@ -230,8 +230,8 @@ MIT License - see LICENSE file for details
 
 ## 📧 Support
 
-- Issues: [GitHub Issues](https://github.com/JirkaOdv/sprava_docker_minecraft_serveru/issues)
-- Discussions: [GitHub Discussions](https://github.com/JirkaOdv/sprava_docker_minecraft_serveru/discussions)
+- Issues: [GitHub Issues](https://github.com/jiriodv/sprava_docker_minecraft_serveru/issues)
+- Discussions: [GitHub Discussions](https://github.com/jiriodv/sprava_docker_minecraft_serveru/discussions)
 
 ---
 

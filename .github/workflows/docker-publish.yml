@@ -9,7 +9,7 @@ on:
 
 env:
   REGISTRY: docker.io
-  IMAGE_NAME: jirka5522/mc-server-boss
+  IMAGE_NAME: jiriodv/mc-server-boss
 
 jobs:
   build:
