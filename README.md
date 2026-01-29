@@ -24,6 +24,35 @@ A modern, feature-rich web panel for managing Minecraft servers with RCON and SS
 
 ### Installation
 
+#### Option 1: Using Docker Hub (Recommended - Fastest)
+
+```bash
+# Pull the pre-built image
+docker pull jirka5522/mc-server-boss:latest
+
+# Run with docker-compose
+cat > docker-compose.yml << 'EOF'
+services:
+  mc-panel:
+    image: jirka5522/mc-server-boss:latest
+    container_name: mc-panel
+    ports:
+      - "5050:5000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - SECRET_KEY=change_this_to_random_string
+      - RCON_PASSWORD=your_rcon_password
+      - RCON_HOST=your_minecraft_server_ip
+      - RCON_PORT=25575
+    restart: unless-stopped
+EOF
+
+docker-compose up -d
+```
+
+#### Option 2: Build from source
+
 1. **Clone the repository**
    ```bash
    git clone https://github.com/JirkaOdv/sprava_docker_minecraft_serveru.git
