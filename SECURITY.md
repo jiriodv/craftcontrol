@@ -1,4 +1,4 @@
-# Security Audit Report - MC Server Boss
+# Security Audit Report - CraftControl
 
 ## Audit Date: 2026-01-29
 

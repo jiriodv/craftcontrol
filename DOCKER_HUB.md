@@ -21,8 +21,8 @@ cd /Users/jirka/Documents/Antigravity/Aplikace/mc_server
 
 # Build s tagem pro Docker Hub
 # Formát: dockerhub_username/repository_name:tag
-docker build -t jirkaodv/mc-server-boss:latest .
-docker build -t jirkaodv/mc-server-boss:1.0.0 .
+docker build -t jirkaodv/craftcontrol:latest .
+docker build -t jirkaodv/craftcontrol:1.0.0 .
 ```
 
 ### Krok 2: Testuj image lokálně
@@ -33,7 +33,7 @@ docker run -d \
   -e RCON_PASSWORD=test123 \
   -e RCON_HOST=192.168.1.100 \
   --name mc-panel-test \
-  jirkaodv/mc-server-boss:latest
+  jirkaodv/craftcontrol:latest
 
 # Zkontroluj, že běží
 docker logs mc-panel-test
@@ -46,8 +46,8 @@ docker rm mc-panel-test
 ### Krok 3: Push na Docker Hub
 ```bash
 # Nahraj obě verze (latest a 1.0.0)
-docker push jirkaodv/mc-server-boss:latest
-docker push jirkaodv/mc-server-boss:1.0.0
+docker push jirkaodv/craftcontrol:latest
+docker push jirkaodv/craftcontrol:1.0.0
 ```
 
 ## Aktualizace README.md pro Docker Hub
@@ -61,7 +61,7 @@ Po nahrání uprav README.md, aby lidé věděli, jak použít image:
 
 ```bash
 # Pull the image
-docker pull jirkaodv/mc-server-boss:latest
+docker pull jirkaodv/craftcontrol:latest
 
 # Run the container
 docker run -d \
@@ -71,7 +71,7 @@ docker run -d \
   -e RCON_PASSWORD=your_rcon_password \
   -e RCON_HOST=your_minecraft_server_ip \
   --name mc-panel \
-  jirkaodv/mc-server-boss:latest
+  jirkaodv/craftcontrol:latest
 ```
 
 ### Using docker-compose with pre-built image
@@ -79,7 +79,7 @@ docker run -d \
 ```yaml
 services:
   mc-panel:
-    image: jirkaodv/mc-server-boss:latest  # Místo build: .
+    image: jirkaodv/craftcontrol:latest  # Místo build: .
     container_name: mc-panel
     ports:
       - "5050:5000"
@@ -109,7 +109,7 @@ on:
 
 env:
   REGISTRY: docker.io
-  IMAGE_NAME: jirkaodv/mc-server-boss
+  IMAGE_NAME: jirkaodv/craftcontrol
 
 jobs:
   build:
@@ -168,7 +168,7 @@ Uprav instalační návod, aby používal image z Docker Hub:
 ```yaml
 services:
   mc-panel:
-    image: jirkaodv/mc-server-boss:latest  # Místo build: ./mc-panel
+    image: jirkaodv/craftcontrol:latest  # Místo build: ./mc-panel
     container_name: mc-panel
     restart: unless-stopped
     ports:
@@ -202,10 +202,10 @@ git tag -a v1.0.1 -m "Release version 1.0.1"
 git push origin v1.0.1
 
 # Build a push nové verze
-docker build -t jirkaodv/mc-server-boss:1.0.1 .
-docker build -t jirkaodv/mc-server-boss:latest .
-docker push jirkaodv/mc-server-boss:1.0.1
-docker push jirkaodv/mc-server-boss:latest
+docker build -t jirkaodv/craftcontrol:1.0.1 .
+docker build -t jirkaodv/craftcontrol:latest .
+docker push jirkaodv/craftcontrol:1.0.1
+docker push jirkaodv/craftcontrol:latest
 ```
 
 S GitHub Actions se to stane automaticky při push tagu!
@@ -216,14 +216,14 @@ Po nahrání budou uživatelé moci:
 
 ```bash
 # Jednoduchý pull a spuštění
-docker pull jirkaodv/mc-server-boss:latest
-docker run -d -p 5050:5000 jirkaodv/mc-server-boss:latest
+docker pull jirkaodv/craftcontrol:latest
+docker run -d -p 5050:5000 jirkaodv/craftcontrol:latest
 ```
 
 Místo:
 ```bash
 # Složitější build ze zdrojáků
 git clone https://github.com/...
-cd mc-server-boss
+cd craftcontrol
 docker build -t mc-panel .
 ```

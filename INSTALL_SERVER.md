@@ -1,4 +1,4 @@
-# Kompletní návod: Instalace MC Server Boss na Linux server
+# Kompletní návod: Instalace CraftControl na Linux server
 
 ## Krok 1: Příprava souborů
 

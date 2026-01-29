@@ -1,7 +1,7 @@
 services:
   mc-panel:
     build: .
-    container_name: mc-server-boss
+    container_name: craftcontrol
     ports:
       - "5050:5000" # Access panel at http://localhost:5050
 

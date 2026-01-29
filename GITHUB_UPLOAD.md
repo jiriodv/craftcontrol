@@ -1,10 +1,10 @@
-# Návod na nahrání MC Server Boss na GitHub
+# Návod na nahrání CraftControl na GitHub
 
 ## Krok 1: Vytvoření GitHub repozitáře
 
 1. Otevři prohlížeč a jdi na: **https://github.com/new**
 2. Vyplň následující údaje:
-   - **Repository name**: `mc-server-boss` (nebo jiný název dle tvého výběru)
+   - **Repository name**: `craftcontrol` (nebo jiný název dle tvého výběru)
    - **Description**: `Modern web panel for Minecraft server management with RCON and SSH integration`
    - **Visibility**: Vyber **Public** (nebo Private, pokud chceš)
    - **DŮLEŽITÉ**: ❌ NEZAŠKRTÁVEJ "Add a README file", ".gitignore", nebo "license" - už je máme!
@@ -16,7 +16,7 @@ Po vytvoření repozitáře ti GitHub ukáže instrukce. Použij následující 
 
 ```bash
 # Přidej GitHub jako remote (nahraď 'username' svým GitHub uživatelským jménem)
-git remote add origin https://github.com/username/mc-server-boss.git
+git remote add origin https://github.com/username/craftcontrol.git
 
 # Nahraj kód na GitHub
 git push -u origin main
@@ -25,7 +25,7 @@ git push -u origin main
 **NEBO pokud používáš SSH:**
 
 ```bash
-git remote add origin git@github.com:username/mc-server-boss.git
+git remote add origin git@github.com:username/craftcontrol.git
 git push -u origin main
 ```
 
@@ -64,7 +64,7 @@ Vytvoř první release (v0.1.0):
 1. Jdi na záložku "Releases"
 2. Klikni "Create a new release"
 3. Tag: `v0.1.0`
-4. Title: `MC Server Boss v0.1.0 - Initial Release`
+4. Title: `CraftControl v0.1.0 - Initial Release`
 5. Popis: Zkopíruj hlavní funkce z README.md
 
 ## Řešení problémů

@@ -1,4 +1,4 @@
-# Instalace MC Server Boss na Linux Server
+# Instalace CraftControl na Linux Server
 
 ## Rychlá instalace (Doporučeno)
 

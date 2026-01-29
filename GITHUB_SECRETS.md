@@ -31,7 +31,7 @@ https://github.com/jiriodv/sprava_docker_minecraft_serveru
 
 Od teď při každém push na `main` branch se automaticky:
 1. Vytvoří nový Docker image
-2. Nahraje se na Docker Hub jako `jiriodv/mc-server-boss:latest`
+2. Nahraje se na Docker Hub jako `jiriodv/craftcontrol:latest`
 
 ## Testování
 

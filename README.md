@@ -1,4 +1,4 @@
-# MC Server Boss 🎮
+# CraftControl 🎮
 
 A modern, feature-rich web panel for managing Minecraft servers with RCON and SSH integration. Built with Flask and designed for Docker deployment.
 
@@ -28,13 +28,13 @@ A modern, feature-rich web panel for managing Minecraft servers with RCON and SS
 
 ```bash
 # Pull the pre-built image
-docker pull jiriodv/mc-server-boss:latest
+docker pull jiriodv/craftcontrol:latest
 
 # Run with docker-compose
 cat > docker-compose.yml << 'EOF'
 services:
   mc-panel:
-    image: jiriodv/mc-server-boss:latest
+    image: jiriodv/craftcontrol:latest
     container_name: mc-panel
     ports:
       - "5050:5000"
@@ -138,14 +138,14 @@ services:
 ### Standalone Docker
 
 ```bash
-docker build -t mc-server-boss .
+docker build -t craftcontrol .
 docker run -d \
   -p 5050:5000 \
   -v $(pwd)/data:/app/data \
   -e RCON_PASSWORD=your_password \
   -e RCON_HOST=192.168.1.100 \
   --name mc-panel \
-  mc-server-boss
+  craftcontrol
 ```
 
 ## 🔧 Plugin Configuration
