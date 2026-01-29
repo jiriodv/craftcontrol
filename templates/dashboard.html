@@ -1,0 +1,2470 @@
+<!DOCTYPE html>
+<html lang="cs">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MC Server Boss</title>
+    <script>
+        // Configure HTMX BEFORE it loads - this ensures credentials are sent with ALL requests
+        document.addEventListener('htmx:configRequest', function (evt) {
+            evt.detail.credentials = 'same-origin';
+            console.log('[HTMX] Configuring request:', evt.detail.path);
+        });
+
+        // Debug HTMX events
+        document.addEventListener('htmx:beforeRequest', function (evt) {
+            console.log('[HTMX] Before request:', evt.detail.path || evt.detail.requestConfig?.path);
+        });
+
+        document.addEventListener('htmx:afterRequest', function (evt) {
+            console.log('[HTMX] After request:', evt.detail.pathInfo?.requestPath, 'Status:', evt.detail.xhr?.status);
+
+            // Show toast for JSON success responses (e.g. from /api/action)
+            if (evt.detail.xhr.status === 200 && evt.detail.xhr.getResponseHeader('Content-Type')?.includes('application/json')) {
+                try {
+                    const resp = JSON.parse(evt.detail.xhr.responseText);
+                    if (resp.status === 'success' && resp.message) {
+                        showToast(resp.message, "var(--success)");
+                    } else if (resp.status === 'error') {
+                        showToast(resp.message || "Chyba při provádění akce", "var(--danger)");
+                    }
+                } catch (e) { }
+            }
+        });
+
+        document.addEventListener('htmx:responseError', function (evt) {
+            console.error('[HTMX] Response error:', evt.detail.pathInfo?.requestPath, 'Status:', evt.detail.xhr?.status);
+        });
+    </script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-dark: #0a0a0c;
+            --bg-sidebar: #111114;
+            --bg-card: rgba(255, 255, 255, 0.05);
+            --accent: #3b82f6;
+            --accent-glow: rgba(59, 130, 246, 0.4);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --sidebar-width: 220px;
+            /* Optimized for MacBook Air */
+            --glass-border: rgba(255, 255, 255, 0.1);
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-primary);
+            margin: 0;
+            display: flex;
+            min-height: 100vh;
+            overflow-x: hidden;
+            padding-top: 60px;
+            /* Space for fixed header */
+        }
+
+        /* Sidebar Styles */
+        .sidebar {
+            width: var(--sidebar-width);
+            background: var(--bg-sidebar);
+            height: 100vh;
+            position: fixed;
+            left: 0;
+            top: 60px;
+            /* Below header */
+            border-right: 1px solid var(--glass-border);
+            display: flex;
+            flex-direction: column;
+            padding: 24px 0;
+            z-index: 100;
+        }
+
+        .sidebar-logo {
+            padding: 0 24px 32px;
+            font-size: 1.25rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent), #60a5fa);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .nav-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            flex: 1;
+        }
+
+        .nav-item {
+            padding: 2px 12px;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            border-radius: 8px;
+            transition: all 0.2s;
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        .nav-link:hover {
+            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .nav-link.active {
+            color: white;
+            background: var(--accent);
+            box-shadow: 0 4px 12px var(--accent-glow);
+        }
+
+        .sidebar-footer {
+            padding: 20px 24px;
+            border-top: 1px solid var(--glass-border);
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            margin-left: var(--sidebar-width);
+            padding: 24px;
+            /* Reduced for MacBook Air */
+            max-width: calc(1600px - var(--sidebar-width));
+        }
+
+        .dashboard-section {
+            display: none;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .dashboard-section.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Component Styles (Robust & Clean) */
+        .glass-card {
+            background: var(--bg-card);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            /* Better for 13" screen */
+            gap: 16px;
+            /* Reduced gap for tighter layout */
+            margin-bottom: 24px;
+        }
+
+
+
+        /* Toggle Switch */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 34px;
+            height: 18px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #333;
+            transition: .4s;
+            border-radius: 34px;
+            border: 1px solid #444;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 12px;
+            width: 12px;
+            left: 2px;
+            bottom: 2px;
+            background-color: #888;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked+.slider {
+            background-color: var(--accent);
+            border-color: var(--accent);
+        }
+
+        input:checked+.slider:before {
+            transform: translateX(16px);
+            background-color: black;
+        }
+
+        .stat-card {
+
+            background: linear-gradient(145deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
+            border: 1px solid var(--glass-border);
+            padding: 20px;
+            border-radius: 12px;
+            transition: transform 0.2s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--accent);
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .section-title {
+            margin: 0;
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        /* Buttons & Actions */
+        .btn {
+            padding: 10px 18px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            background: #333;
+            color: white;
+            text-decoration: none;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2563eb;
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--glass-border);
+            color: var(--text-primary);
+        }
+
+        .btn-outline:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        /* Tables & Lists */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .data-table th {
+            text-align: left;
+            padding: 12px;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .data-table td {
+            padding: 16px 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+        }
+
+        /* Module Tags */
+        .module-badge {
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            background: rgba(59, 130, 246, 0.1);
+            color: var(--accent);
+        }
+
+        /* Console Integration */
+        .console-container {
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--glass-border);
+        }
+
+        .console-output {
+            height: 450px;
+            overflow-y: auto;
+            padding: 20px;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .console-input-wrapper {
+            background: #111;
+            padding: 0 20px;
+            border-top: 1px solid var(--glass-border);
+        }
+
+        .console-field {
+            width: 100%;
+            background: transparent;
+            border: none;
+            padding: 16px 0;
+            color: white;
+            font-family: monospace;
+            outline: none;
+        }
+
+        /* Loading Spinner */
+        .loader {
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            display: inline-block;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* MacBook Air 13" Optimization (1440x900) */
+        @media (max-width: 1440px) {
+            :root {
+                --sidebar-width: 200px;
+            }
+
+            .main-content {
+                padding: 20px;
+            }
+
+            .stat-grid {
+                grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+                gap: 12px;
+            }
+
+            .charts-row {
+                gap: 16px;
+            }
+        }
+
+        /* Tablet/Small Laptop */
+        @media (max-width: 1024px) {
+            .sidebar {
+                width: 70px;
+            }
+
+            .sidebar-logo span,
+            .nav-link span,
+            .sidebar-footer {
+                display: none;
+            }
+
+            .main-content {
+                margin-left: 70px;
+                padding: 16px;
+            }
+
+            .nav-link {
+                justify-content: center;
+                padding: 12px;
+            }
+
+            .stat-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        /* Player Cards in Sidebar Context */
+        .player-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 24px;
+        }
+
+        /* Module Custom Styles */
+        .module-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 16px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .module-card.active {
+            background: rgba(59, 130, 246, 0.1);
+            border-color: var(--accent);
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.1);
+        }
+
+        .module-card:hover {
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        /* Chart adjustments */
+        .charts-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+
+        @media (max-width: 900px) {
+            .charts-row {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Gift Modal Grid */
+        .gift-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .gift-item-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 12px 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .gift-item-card:hover {
+            background: var(--accent-gradient);
+            transform: translateY(-3px);
+            border-color: rgba(255, 255, 255, 0.3);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .gift-item-card:active {
+            transform: scale(0.95);
+        }
+
+        /* Toast Notifications */
+        #toast {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            padding: 16px 24px;
+            border-radius: 12px;
+            background: var(--bg-sidebar);
+            border: 1px solid var(--glass-border);
+            color: white;
+            z-index: 1000;
+            display: none;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            animation: slideUp 0.3s cubic-bezier(0.17, 0.84, 0.44, 1);
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .wiki-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .wiki-table td {
+            padding: 10px;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .fav-star {
+            cursor: pointer;
+            color: #444;
+            transition: var(--accent) 0.2s;
+        }
+
+        .fav-star.active {
+            color: gold;
+            filter: none;
+        }
+
+        .fav-star {
+            cursor: pointer;
+            font-size: 18px;
+            filter: grayscale(1);
+            transition: all 0.2s;
+        }
+
+        .fav-star.active {
+            filter: grayscale(0);
+            text-shadow: 0 0 5px rgba(251, 191, 36, 0.5);
+        }
+
+        .fav-star:hover {
+            transform: scale(1.2);
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal-content {
+            transform: scale(0.9);
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .modal-overlay.active .modal-content {
+            transform: scale(1);
+        }
+
+        .config-row:hover {
+            background: rgba(255, 255, 255, 0.03);
+        }
+    </style>
+
+</head>
+
+<body>
+    <!-- Autocomplete Suggestions -->
+    <datalist id="command-suggestions">
+        <option value="/time set day">
+        <option value="/weather clear">
+        <option value="/gamemode creative">
+        <option value="/gamemode survival">
+        <option value="/kick ">
+        <option value="/tp ">
+        <option value="/ban ">
+        <option value="/pardon ">
+        <option value="/op ">
+        <option value="/deop ">
+        <option value="/whitelist add ">
+        <option value="/whitelist remove ">
+        <option value="/save-all">
+        <option value="/stop">
+    </datalist>
+    <div id="detailsModal" class="modal-overlay">
+        <div class="modal-content glass-card" style="width: 500px; max-width: 90vw; padding: 24px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h2 style="margin: 0;">Detaily Hráče</h2>
+                <button class="btn btn-outline"
+                    onclick="document.getElementById('detailsModal').classList.remove('active')"> zavřít </button>
+            </div>
+            <div id="detailsContent"
+                style="background: rgba(0,0,0,0.2); border-radius: 8px; padding: 16px; overflow: auto; max-height: 400px;">
+                Načítám...
+            </div>
+        </div>
+    </div>
+
+    <!-- NEW GIFT MODAL -->
+    <div id="giftModal" class="modal-overlay">
+        <div class="modal-content glass-card"
+            style="width: 800px; max-width: 95vw; padding: 24px; max-height: 90vh; display: flex; flex-direction: column;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="margin: 0;" id="giftModalTitle">Darovat předmět</h2>
+                <button class="btn btn-outline"
+                    onclick="document.getElementById('giftModal').classList.remove('active')"> zavřít </button>
+            </div>
+
+            <div style="flex: 1; overflow-y: auto; padding-right: 10px;">
+                <!-- Systematic Categories -->
+                <div class="gift-category">
+                    <h4
+                        style="color: var(--accent); border-bottom: 1px solid var(--glass-border); padding-bottom: 8px; margin-top: 0;">
+                        💎 Cenné Suroviny</h4>
+                    <div class="gift-grid" id="gift-res"></div>
+                </div>
+
+                <div class="gift-category" style="margin-top: 24px;">
+                    <h4 style="color: #ec4899; border-bottom: 1px solid var(--glass-border); padding-bottom: 8px;">⚔️
+                        Boj a Výzbroj</h4>
+                    <div class="gift-grid" id="gift-combat"></div>
+                </div>
+
+                <div class="gift-category" style="margin-top: 24px;">
+                    <h4 style="color: #10b981; border-bottom: 1px solid var(--glass-border); padding-bottom: 8px;">🍎
+                        Jídlo a Přežití</h4>
+                    <div class="gift-grid" id="gift-food"></div>
+                </div>
+
+                <div class="gift-category" style="margin-top: 24px;">
+                    <h4 style="color: #fbbf24; border-bottom: 1px solid var(--glass-border); padding-bottom: 8px;">🛠️
+                        Nástroje a Ostatní</h4>
+                    <div class="gift-grid" id="gift-tools"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <aside class="sidebar">
+        <div class="sidebar-logo">
+            <span style="font-size: 24px;">🎮</span>
+            <span>MC PANEL</span>
+        </div>
+
+        <nav class="nav-list">
+            <div class="nav-item">
+                <a class="nav-link active" onclick="showSection('overview')">
+                    <span>📊</span> <span>Přehled</span>
+                </a>
+            </div>
+            <div class="nav-item">
+                <a class="nav-link" onclick="showSection('players')">
+                    <span>👥</span> <span>Hráči</span>
+                </a>
+            </div>
+            <div class="nav-item">
+                <a class="nav-link" onclick="showSection('console')">
+                    <span>💻</span> <span>Konzole & Logy</span>
+                </a>
+            </div>
+            <div class="nav-item">
+                <a class="nav-link" onclick="showSection('plugins')">
+                    <span>🧩</span> <span>Správce Pluginů</span>
+                </a>
+            </div>
+
+            <div class="nav-item">
+                <a class="nav-link" onclick="showSection('wiki')">
+                    <span>📚</span> <span>Wiki Příkazy</span>
+                </a>
+            </div>
+
+            <div class="nav-item">
+                <a class="nav-link" onclick="showSection('map')">
+                    <span>🗺️</span> <span>Živá Mapa</span>
+                </a>
+            </div>
+            <div class="nav-item">
+                <a class="nav-link" onclick="showSection('history')">
+                    <span>🕒</span> <span>Historie & Evidence</span>
+                </a>
+            </div>
+            <div class="nav-item">
+                <a class="nav-link" onclick="showSection('config')">
+                    <span>⚙️</span> <span>Konfigurace</span>
+                </a>
+            </div>
+            <div class="nav-item">
+                <a class="nav-link" onclick="showSection('manual')">
+                    <span>📖</span> <span>Návod / Plugin Info</span>
+                </a>
+            </div>
+            <div class="nav-item"
+                style="margin-top: 20px; border-top: 1px solid var(--glass-border); padding-top: 10px;">
+                <a class="nav-link" onclick="showSection('settings')">
+                    <span>🛠️</span> <span>Nastavení Aplikace</span>
+                </a>
+            </div>
+        </nav>
+
+        <div style="padding: 0 12px 12px;">
+            <button class="btn btn-primary" style="width: 100%; justify-content: center;" onclick="runBackup()">
+                📦 Zálohovat Server
+            </button>
+        </div>
+        </div>
+    </aside>
+
+    <!-- Top Header (Fixed at top) -->
+    <header
+        style="position: fixed; top: 0; left: 0; right: 0; display: flex; justify-content: space-between; align-items: center; padding: 12px 24px; border-bottom: 1px solid var(--glass-border); background: rgba(10, 10, 12, 0.98); backdrop-filter: blur(10px); z-index: 1001; height: 60px; box-sizing: border-box;">
+        <div>
+            <h1 style="font-size: 1.5rem; margin: 0; font-weight: 700;">Vítejte v MC Panelu</h1>
+            <div style="font-size: 0.9rem; color: var(--text-secondary); display: flex; gap: 12px;">
+                <span>MC Server Manager</span>
+                <span id="header-hostname" style="color: var(--accent); opacity: 0.8; font-family: monospace;"></span>
+                <span id="header-ip" style="color: var(--text-secondary); opacity: 0.6; font-size: 0.8rem;"></span>
+            </div>
+        </div>
+
+        <div
+            style="flex: 1; max-width: 400px; margin: 0 40px; position: relative; border: 1px solid var(--glass-border); border-radius: 6px; background: rgba(0,0,0,0.3); overflow: hidden; display: flex; align-items: center; transition: all 0.3s; box-shadow: 0 2px 10px rgba(0,0,0,0.2);">
+            <span style="padding: 0 10px; color: var(--accent); font-size: 14px;">⚡</span>
+            <input type="text" id="header-console-input" placeholder="Rychlý příkaz (např. /time set day)..."
+                maxlength="256" list="command-suggestions"
+                style="flex: 1; background: transparent; border: none; color: white; padding: 8px 4px; font-size: 13px; font-family: 'JetBrains Mono', monospace; outline: none; width: 100%;"
+                onkeydown="if(event.key==='Enter') sendHeaderConsoleCommand()">
+            <button onclick="sendHeaderConsoleCommand()"
+                style="background: transparent; border: none; color: var(--text-secondary); padding: 0 10px; cursor: pointer; height: 100%; display: flex; align-items: center; transition: color 0.2s;">
+                <span style="font-size: 12px;">↵</span>
+            </button>
+        </div>
+
+        <!-- Header Stats Bar -->
+        <div style="display: flex; gap: 24px; align-items: center;">
+
+            <!-- Online Players Tooltip Container -->
+            <div class="header-stat-item tooltip-container">
+                <span style="color: var(--text-secondary); font-size: 12px; font-weight: 500;">PLAYERS</span>
+                <b id="header-stat-players" style="font-size: 14px; color: var(--accent);">--/--</b>
+
+                <div class="tooltip-content" id="header-players-tooltip">
+                    <div
+                        style="border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 4px; margin-bottom: 4px; font-weight: bold;">
+                        Online:</div>
+                    <div id="header-players-list" style="display: flex; flex-direction: column; gap: 2px;">
+                        <span style="color: #999;">Nikdo není online</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="header-stat-item">
+                <span style="color: var(--text-secondary); font-size: 12px; font-weight: 500;">CPU</span>
+                <b id="header-stat-cpu" style="font-size: 14px;">--%</b>
+                <span id="header-stat-cpu-cores" style="font-size: 10px; color: var(--text-secondary);">-- cores</span>
+            </div>
+
+            <div class="header-stat-item">
+                <span style="color: var(--text-secondary); font-size: 12px; font-weight: 500;">RAM</span>
+                <b id="header-stat-ram" style="font-size: 14px;">--%</b>
+                <span id="header-stat-ram-gb" style="font-size: 10px; color: var(--text-secondary);">-- GB</span>
+            </div>
+
+            <!-- Existing Power Controls -->
+            <div class="glass-card"
+                style="margin-bottom: 0; padding: 6px 16px; display: flex; align-items: center; gap: 12px; border: 1px solid var(--glass-border);">
+                <div id="power-status-badge"
+                    style="width: 10px; height: 10px; border-radius: 50%; background: #666; transition: all 0.3s; box-shadow: 0 0 5px rgba(0,0,0,0.5);"
+                    title="Neznámý stav"></div>
+
+                <button class="btn btn-sm" style="background: var(--success); font-size: 12px; padding: 4px 12px;"
+                    onclick="serverAction('start')">Start</button>
+                <button class="btn btn-sm" style="background: var(--warning); font-size: 12px; padding: 4px 12px;"
+                    onclick="serverAction('restart')">Restart</button>
+                <button class="btn btn-sm" style="background: var(--danger); font-size: 12px; padding: 4px 12px;"
+                    onclick="serverAction('stop')">Stop</button>
+            </div>
+        </div>
+    </header>
+
+    <style>
+        .header-stat-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            min-width: 80px;
+            /* Fixed width to prevent shifting */
+            line-height: 1.2;
+            cursor: default;
+            position: relative;
+        }
+
+        .header-stat-item b {
+            font-family: 'Courier New', monospace;
+            /* Monospace for consistent width */
+            min-width: 60px;
+            /* Ensure consistent width */
+            text-align: center;
+        }
+
+        .tooltip-container:hover .tooltip-content {
+            display: block;
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .tooltip-content {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%) translateY(10px);
+            background: rgba(0, 0, 0, 0.9);
+            border: 1px solid var(--glass-border);
+            padding: 12px;
+            border-radius: 8px;
+            min-width: 150px;
+            z-index: 1001;
+            opacity: 0;
+            transition: all 0.2s;
+            pointer-events: none;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            margin-top: 10px;
+        }
+
+        .tooltip-content::before {
+            content: '';
+            position: absolute;
+            top: -6px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-bottom: 6px solid rgba(0, 0, 0, 0.9);
+        }
+    </style>
+
+    <main class="main-content">
+
+        <!-- SECTION: OVERVIEW -->
+        <div id="section-overview" class="dashboard-section active">
+            <div class="stat-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Využití RAM</div>
+                    <div class="stat-value" id="stat-ram">--</div>
+                    <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;" id="stat-ram-detail">--
+                        MB</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Disk (Volné)</div>
+                    <div class="stat-value" id="stat-disk">--</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Stav systému</div>
+                    <div class="stat-value" id="stat-mc-uptime"
+                        style="font-size: 1.1rem; display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                        --</div>
+                    <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;" id="stat-uptime-host">
+                        Host: --</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">System Host</div>
+                    <div class="stat-value" id="stat-hostname" style="font-size: 1.1rem; color: var(--accent);">--</div>
+                    <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;" id="stat-ip">--</div>
+                </div>
+            </div>
+
+            <div class="charts-row">
+                <div class="glass-card">
+                    <h3 style="margin-top: 0; font-size: 14px; text-transform: uppercase;">Zátěž RAM</h3>
+                    <div style="height: 200px;"><canvas id="ramChart"></canvas></div>
+                </div>
+                <div class="glass-card">
+                    <h3 style="margin-top: 0; font-size: 14px; text-transform: uppercase;">Zátěž CPU</h3>
+                    <div style="height: 200px;"><canvas id="cpuChart"></canvas></div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- SECTION: PLAYERS -->
+        <div id="section-players" class="dashboard-section">
+            <!-- QUICK GLOBAL CONTROL -->
+            <div class="glass-card" style="margin-bottom: 24px; border-top: 4px solid var(--accent);">
+                <h2 class="section-title">⚡ Global Control (Všichni hráči)</h2>
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px;">
+                    <button class="btn btn-outline"
+                        style="border-color: #06b6d4; justify-content: center; font-weight: 600;"
+                        onclick="sendAction('@a', 'freeze_all')">
+                        ❄️ ZMRAZIT VŠECHNY
+                    </button>
+                    <button class="btn btn-outline"
+                        style="border-color: #94a3b8; justify-content: center; font-weight: 600;"
+                        onclick="sendAction('@a', 'unfreeze_all')">
+                        🔥 ODMRAZIT VŠECHNY
+                    </button>
+                    <button class="btn btn-outline"
+                        style="border-color: var(--accent); justify-content: center; font-weight: 600;"
+                        onclick="sendAction('@a', 'tp_all_here')">
+                        📍 PŘITÁHNOUT VŠECHNY
+                    </button>
+                    <button class="btn btn-outline"
+                        style="border-color: #ec4899; justify-content: center; font-weight: 600;"
+                        onclick="sendAction('@a', 'clear_chat_all')">
+                        🧹 VYČISTIT CHAT
+                    </button>
+                </div>
+                <p style="font-size: 11px; color: var(--text-secondary); margin-top: 12px;">
+                    Příkazy v této sekci ovlivní okamžitě všechny hráče připojené na serveru.
+                </p>
+            </div>
+            <div class="glass-card">
+                <div class="section-header">
+                    <h2 class="section-title">Online Hráči</h2>
+                    <div class="loader" id="player-loader" style="display: none;"></div>
+                </div>
+                <div id="player-list-container">
+                    <div style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                        Načítám hráče... <br>
+                        <span style="font-size: 10px; color: grey;">(Pokud to trvá dlouho, backend neodpovídá)</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="glass-card">
+                <h2 class="section-title">Správa Whitelistu & Blacklistu</h2>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+                    <div>
+                        <h3 style="font-size: 14px; color: var(--text-secondary); margin-bottom: 12px;">Whitelist
+                            (Povolení)</h3>
+                        <div class="whitelist-add-form" style="display: flex; gap: 8px; margin-bottom: 16px;">
+                            <input type="text" id="whitelist-input" class="console-field"
+                                style="border: 1px solid var(--glass-border); padding: 8px; border-radius: 6px; background: rgba(0,0,0,0.2); font-size: 13px;"
+                                placeholder="Jméno...">
+                            <button class="btn btn-primary" onclick="addToWhitelist()"
+                                style="padding: 8px 16px;">Přidat</button>
+                        </div>
+                        <div id="whitelist-tags" class="whitelist-tags"></div>
+                    </div>
+
+                    <div style="border-left: 1px solid var(--glass-border); padding-left: 24px;">
+                        <h3 style="font-size: 14px; color: var(--text-secondary); margin-bottom: 12px;">Blacklist
+                            (Zákazy)</h3>
+                        <div class="whitelist-add-form" style="display: flex; gap: 8px; margin-bottom: 16px;">
+                            <input type="text" id="banlist-input" class="console-field"
+                                style="border: 1px solid var(--glass-border); padding: 8px; border-radius: 6px; background: rgba(0,0,0,0.2); font-size: 13px; flex: 1;"
+                                placeholder="Jméno...">
+                            <input type="text" id="banlist-reason" class="console-field"
+                                style="border: 1px solid var(--glass-border); padding: 8px; border-radius: 6px; background: rgba(0,0,0,0.2); font-size: 13px; flex: 1;"
+                                placeholder="Důvod...">
+                            <button class="btn btn-primary" onclick="addToBanlist()"
+                                style="padding: 8px 16px; background: var(--danger);">Ban</button>
+                        </div>
+
+                        <div id="banlist-tags" class="whitelist-tags"></div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- SECTION: CONSOLE -->
+        <div id="section-console" class="dashboard-section">
+            <div class="glass-card">
+                <h2 class="section-title">Interaktivní Konzole</h2>
+                <div class="console-container">
+                    <div id="console-output" class="console-output"
+                        style="height: 200px; margin-bottom: 12px; border: 1px solid var(--glass-border);">
+                        <div style="color: var(--text-secondary); font-style: italic;">Konzole připravena (historie
+                            příkazů)...</div>
+                    </div>
+
+                    <div class="console-input-wrapper">
+                        <span style="color: var(--accent); font-weight: bold; margin-right: 8px;">&gt;_</span>
+                        <input type="text" id="console-input" class="console-input"
+                            placeholder="Zadejte příkaz (např. title @a title Vítejte)..." list="command-suggestions"
+                            onkeydown="if(event.key==='Enter') sendConsoleCommand()" autocomplete="off">
+                        <button class="btn btn-primary" onclick="sendConsoleCommand()"
+                            style="background: var(--accent); padding: 8px 16px;">Odeslat</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="glass-card" style="margin-top: 24px;">
+                <div class="section-header">
+                    <h2 class="section-title">Logy Serveru (latest.log - Read Only)</h2>
+                    <button class="btn btn-outline" onclick="loadLogs()">Aktualizovat</button>
+                </div>
+                <div id="server-logs" class="console-output"
+                    style="height: 300px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border);">
+                    Načítám logy...
+                </div>
+            </div>
+        </div>
+
+        <!-- SECTION: PLUGINS -->
+        <div id="section-plugins" class="dashboard-section">
+            <h2 class="section-title">Správce Pluginů</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 20px;">Zde můžete spravovat .jar soubory modifikací.
+                Po změně je nutný <b>RESTART</b>.</p>
+            {% include 'partials/plugins.html' %}
+        </div>
+
+        <!-- SECTION: WIKI -->
+
+        <div id="section-wiki" class="dashboard-section">
+            <!-- Aktivní Moduly Section -->
+            <div class="glass-card">
+                <div class="section-header">
+                    <h3 class="section-title" style="font-size: 1.1rem;">Aktivní Moduly</h3>
+                    <span style="font-size: 12px; color: var(--text-secondary);">Kliknutím zobrazíte příkazy
+                        modulu</span>
+                </div>
+                <div class="modules-grid" id="modules-container">
+                    <div class="module-card" id="mod-worldedit" onclick="toggleModule('worldedit')">
+                        <span style="font-size: 20px;">🏗️</span>
+                        <span class="module-name">WorldEdit</span>
+                    </div>
+                    <div class="module-card" id="mod-bluemap" onclick="toggleModule('bluemap')">
+                        <span style="font-size: 20px;">🗺️</span>
+                        <span class="module-name">BlueMap</span>
+                    </div>
+                    <div class="module-card" id="mod-essentialsx" onclick="toggleModule('essentialsx')">
+                        <span style="font-size: 20px;">💊</span>
+                        <span class="module-name">EssentialsX</span>
+                    </div>
+                    <div class="module-card" id="mod-authme" onclick="toggleModule('authme')">
+                        <span style="font-size: 20px;">🔐</span>
+                        <span class="module-name">AuthMe</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Wiki Commands Table -->
+            <div class="glass-card">
+                <h2 class="section-title">Chytrá Nápověda</h2>
+                <p style="color: var(--text-secondary); margin-bottom: 24px;">Kliknutím na hvězdičku si příkaz uložíte
+                    mezi oblíbené.</p>
+                <div id="wiki-container" style="overflow-x: auto;">
+                    {% include 'partials/wiki_table.html' %}
+                </div>
+            </div>
+        </div>
+
+        <!-- SECTION: MAP -->
+        <div id="section-map" class="dashboard-section">
+            <h2 class="section-title">Živá Mapa Světa 🗺️</h2>
+            <div id="map-container" class="glass-card"
+                style="padding: 0; overflow: hidden; height: calc(100vh - 200px); position: relative; background: #000;">
+                <iframe id="map-frame" src="" style="width: 100%; height: 100%; border: none;"></iframe>
+                <div id="map-error"
+                    style="display: none; position: absolute; top:50%; left:50%; transform: translate(-50%, -50%); text-align: center;">
+                    <span style="font-size: 40px;">⚠️</span>
+                    <p style="margin-top: 10px;"> BlueMap URL není nastavena nebo server neodpovídá. </p>
+                    <p style="font-size: 12px; color: var(--text-secondary);"> Nastavte BLUEMAP_URL v docker-compose.yml
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- SECTION: HISTORY (Combined Historie & Evidence + Attendance) -->
+        <div id="section-history" class="dashboard-section">
+            <h2 class="section-title">Historie & Evidence žáků 🕒</h2>
+
+            <div class="stat-grid" style="grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px;">
+                <!-- Card 1: Groups and Last Seen (Original History) -->
+                <div class="glass-card">
+                    <h3 style="margin-top:0;">📝 Evidence a Skupiny</h3>
+                    <div id="history-table-container" hx-get="/history/table" hx-trigger="load, every 30s">
+                        <div style="color: var(--text-secondary);">Načítám evidenci...</div>
+                    </div>
+                </div>
+
+                <!-- Card 2: Login Sessions (New Attendance) -->
+                <div class="glass-card">
+                    <h3 style="margin-top:0;">⏳ Logy Docházky</h3>
+                    <div style="overflow-x: auto;">
+                        <table class="wiki-table">
+                            <thead>
+                                <tr>
+                                    <th>Hráč</th>
+                                    <th>Průběh</th>
+                                    <th>Doba</th>
+                                </tr>
+                            </thead>
+                            <tbody id="attendance-list">
+                                <!-- Dynamic content -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SECTION: CONFIG -->
+        <div id="section-config" class="dashboard-section">
+            <h2 class="section-title">Konfigurace Serveru ⚙️</h2>
+
+            <!-- SYSTEM CONNECTION CARD MOVED -->
+            <!-- REMOVING -->
+
+            <!-- SETTINGS MOVED TO OWN SECTION -->
+        </div>
+
+        <div class="glass-card"
+            style="margin-bottom: 24px; border-left: 4px solid var(--accent); background: rgba(59, 130, 246, 0.05);">
+            <h3 style="margin-top:0; color: var(--accent);">📘 Průvodce nastavením (server.properties)</h3>
+            <div
+                style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; font-size: 13px; line-height: 1.5;">
+                <div>
+                    <b style="color: var(--text-primary);">Co to je?</b><br>
+                    Soubor <code>server.properties</code> je "mozkem" vašeho Minecraft serveru. Obsahuje veškerá
+                    základní pravidla fungování světa, od obtížnosti až po technické limity výkonu.
+                </div>
+                <div>
+                    <b style="color: var(--text-primary);">Jak to funguje?</b><br>
+                    Změny, které zde provedete, se uloží do souboru na disk. Aby si je ale server načetl, je <b>vždy
+                        nutný restart</b> celého Minecraft serveru (tlačítko dole).
+                </div>
+                <div>
+                    <b style="color: var(--text-primary);">Na koho má vliv?</b><br>
+                    Nastavení ovlivňuje úplně všechny hráče i samotný hardware. Může měnit styl hry (PvP) i to, jak
+                    plynule server poběží (View Distance).
+                </div>
+            </div>
+        </div>
+
+        <div class="glass-card">
+            <h3 style="margin-top:0;">Jednotlivá nastavení</h3>
+            <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 20px;">
+                Zde můžete upravit konkrétní parametry. Podrobný popis najdete v pravém sloupci každého řádku.
+            </p>
+
+            <div id="config-editor-container" style="display: flex; flex-direction: column;">
+                <!-- Dynamic form -->
+            </div>
+
+            <div
+                style="margin-top: 32px; display: flex; gap:12px; border-top: 1px solid var(--glass-border); padding-top: 24px;">
+                <button class="btn btn-primary" style="padding: 12px 32px;" onclick="saveServerProperties()">💾
+                    Uložit nastavení</button>
+                <button class="btn btn-outline" onclick="loadServerProperties()">🔄 Obnovit</button>
+                <div style="flex:1;"></div>
+                <button class="btn" style="background: var(--danger);"
+                    onclick="if(confirm('Opravdu restartovat celý server?')) sendAction('@a', 'restart_server')">🔄
+                    Restartovat Server</button>
+            </div>
+        </div>
+        </div>
+
+        <!-- SECTION: SETTINGS -->
+        <div id="section-settings" class="dashboard-section">
+            <h2 class="section-title">Nastavení Aplikace 🛠️</h2>
+
+            <!-- INSTALLATION HELP CARD -->
+            <div class="glass-card" style="margin-bottom: 24px; border: 1px solid var(--success);">
+                <h3 style="margin-top:0; color: var(--success);">🚀 Instalace Serveru</h3>
+                <p style="font-size: 13px; color: var(--text-secondary);">
+                    Pokud instalujete nový server, zde je vzorová konfigurace <code>docker-compose.yml</code>, která má
+                    správně nastavené porty pro tento panel.
+                </p>
+                <button class="btn btn-outline" onclick="loadSampleConfig()" style="margin-bottom: 12px;">
+                    📄 Zobrazit vzorový docker-compose.yml
+                </button>
+                <div id="sample-config-container" style="display:none; margin-top: 10px;">
+                    <pre id="sample-config-code"
+                        style="background: #1e293b; padding: 12px; border-radius: 8px; font-size: 12px; overflow-x: auto; color: #a5b4fc;"></pre>
+                </div>
+            </div>
+
+            <script>
+                function loadSampleConfig() {
+                    fetch('/api/config/example_docker_compose')
+                        .then(r => r.json())
+                        .then(data => {
+                            if (data.status === 'success') {
+                                document.getElementById('sample-config-code').textContent = data.content;
+                                document.getElementById('sample-config-container').style.display = 'block';
+                            } else {
+                                alert('Chyba: ' + data.message);
+                            }
+                        });
+                }
+            </script>
+
+            <div class="glass-card" style="margin-bottom: 32px; border: 1px solid var(--accent);">
+                <h3 style="margin-top:0; display:flex; align-items:center; gap:10px;">
+                    🔌 Nastavení Připojení (SSH & RCON)
+                    <span class="status-badge status-online" style="font-size:10px;">SYSTEM ADMIN</span>
+                </h3>
+                <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 20px;">
+                    Zde nastavte, jak se má tento panel připojovat k vašemu Minecraft serveru. Změny se projeví ihned po
+                    uložení.
+                </p>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+                    <!-- SSH Config -->
+                    <div>
+                        <h4
+                            style="color: var(--text-primary); margin-bottom:12px; border-bottom:1px solid var(--glass-border); padding-bottom:8px;">
+                            SSH Tunel (Vzdálený server)</h4>
+                        <div style="display:grid; grid-template-columns: 1fr 80px; gap:10px; margin-bottom:10px;">
+                            <div>
+                                <label style="font-size:11px; color:var(--text-secondary);">SSH Host (IP)</label>
+                                <input type="text" id="sys-ssh-host" class="console-field" style="width:100%;">
+                            </div>
+                            <div>
+                                <label style="font-size:11px; color:var(--text-secondary);">Port</label>
+                                <input type="text" id="sys-ssh-port" class="console-field" style="width:100%;"
+                                    value="22">
+                            </div>
+                        </div>
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                            <div>
+                                <label style="font-size:11px; color:var(--text-secondary);">SSH User</label>
+                                <input type="text" id="sys-ssh-user" class="console-field" style="width:100%;">
+                            </div>
+                            <div>
+                                <label style="font-size:11px; color:var(--text-secondary);">SSH Password</label>
+                                <input type="password" id="sys-ssh-pass" class="console-field" style="width:100%;">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- RCON Config -->
+                    <div>
+                        <h4
+                            style="color: var(--text-primary); margin-bottom:12px; border-bottom:1px solid var(--glass-border); padding-bottom:8px;">
+                            RCON (Minecraft Konzole)</h4>
+                        <div style="margin-bottom:10px;">
+                            <label style="font-size:11px; color:var(--text-secondary);">RCON Host (zvykle localhost přes
+                                tunel)</label>
+                            <input type="text" id="sys-rcon-host" class="console-field" style="width:100%;"
+                                value="localhost">
+                        </div>
+                        <div style="display:grid; grid-template-columns: 1fr 100px; gap:10px;">
+                            <div>
+                                <label style="font-size:11px; color:var(--text-secondary);">RCON Password</label>
+                                <input type="password" id="sys-rcon-pass" class="console-field" style="width:100%;">
+                            </div>
+                            <div>
+                                <label style="font-size:11px; color:var(--text-secondary);">Port</label>
+                                <input type="text" id="sys-rcon-port" class="console-field" style="width:100%;"
+                                    value="25575">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top:20px; padding-top:15px; border-top:1px solid var(--glass-border);">
+                    <label style="font-size:11px; color:var(--text-secondary);">BlueMap URL (pro Živou Mapu)</label>
+                    <input type="text" id="sys-bluemap-url" class="console-field" style="width:100%;"
+                        placeholder="http://vas-server:8100">
+                </div>
+
+                <div style="margin-top:20px; text-align:right;">
+                    <button class="btn btn-primary" onclick="saveSystemConfig()">💾 Uložit Systémové Nastavení</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- SECTION: MANUAL -->
+        <div id="section-manual" class="dashboard-section">
+            <h2 class="section-title">Návod k obsluze 📖</h2>
+
+            <div class="stat-grid" style="grid-template-columns: 1fr 1fr; margin-bottom: 24px;">
+                <div class="glass-card" style="border-left: 4px solid var(--accent);">
+                    <h3 style="margin-top:0;">🧩 Potřebné Pluginy</h3>
+                    <p style="font-size: 14px; line-height: 1.6;">
+                        Aby všechna tlačítka v panelu fungovala, <b>musí</b> být na serveru tyto pluginy:<br><br>
+                        <span style="color:var(--accent);">●</span> <b>EssentialsX</b> (Spawn, Heal, Mute, Info)<br>
+                        <span style="color:var(--accent);">●</span> <b>AuthMe</b> (Správa hesel / Unreg)<br>
+                        <span style="color:var(--accent);">●</span> <b>WorldEdit</b> (Sekyrka //wand)<br>
+                        <span style="color:var(--accent);">●</span> <b>BlueMap</b> (Aktualizace mapy)
+                    </p>
+                </div>
+                <div class="glass-card" style="border-left: 4px solid var(--success);">
+                    <h3 style="margin-top:0;">⚡ Rychlé tipy</h3>
+                    <p style="font-size: 14px; line-height: 1.6;">
+                        <span style="color:var(--success);">●</span> <b>Hard Refresh:</b> Cmd+Shift+R při problémech s
+                        UI.<br>
+                        <span style="color:var(--success);">●</span> <b>Konzole:</b> Příkazy v konzoli pište bez lomítka
+                        `/`.<br>
+                        <span style="color:var(--success);">●</span> <b>Statistiky:</b> Hostname a IP vidíte v
+                        'Přehledu'.<br>
+                        <span style="color:var(--success);">●</span> <b>Dárky:</b> Do pole v kartě hráče napište název
+                        (např. 'apple') a klikněte na Dát.
+                    </p>
+                </div>
+            </div>
+
+            <div class="glass-card">
+                <h3>🛠️ První spuštění (Admin)</h3>
+                <div
+                    style="background: rgba(0,0,0,0.2); padding: 16px; border-radius: 8px; font-family: monospace; font-size: 13px;">
+                    1. V server.properties: enable-rcon=true <br>
+                    2. V docker-compose.yml: Vyplňte SSH a RCON údaje <br>
+                    3. Spusťte: docker compose up -d <br>
+                    4. Přístup: http://localhost:5050 (admin/admin123)
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div id="toast"></div>
+
+    <!-- CUSTOM MODAL -->
+    <div id="custom-modal" class="modal-overlay">
+        <div class="modal-content glass-card"
+            style="min-width: 320px; max-width: 400px; border: 1px solid var(--glass-border);">
+            <h3 id="modal-title" style="margin-top: 0; font-size: 1.25rem;">Potvrzení</h3>
+            <p id="modal-message" style="color: var(--text-secondary); margin-bottom: 24px; line-height: 1.5;">Opravdu?
+            </p>
+            <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                <button class="btn btn-outline" onclick="closeModal()">Zrušit</button>
+                <button id="modal-confirm-btn" class="btn btn-primary"
+                    style="background: var(--accent);">Potvrdit</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+
+        // --- NAVIGATION LOGIC ---
+        function showSection(sectionId) {
+            // Update URL hash to preserve state across refreshes
+            window.location.hash = sectionId;
+
+            // Hide all
+            document.querySelectorAll('.dashboard-section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+
+            // Show target
+            document.getElementById('section-' + sectionId).classList.add('active');
+
+            // Highlight nav
+            const links = document.querySelectorAll('.nav-link');
+            links.forEach(l => {
+                if (l.onclick.toString().includes(sectionId)) l.classList.add('active');
+            });
+
+            // Trigger HTMX refreshes if needed
+            if (sectionId === 'players') loadPlayers();
+            if (sectionId === 'wiki') htmx.ajax('GET', '/api/wiki', { target: '#wiki-container' });
+            if (sectionId === 'plugins') loadPlugins();
+            if (sectionId === 'history') {
+                loadAttendance();
+                htmx.ajax('GET', '/history/table', { target: '#history-table-container' });
+            }
+            if (sectionId === 'config') loadServerProperties();
+            if (sectionId === 'settings') loadSystemConfig();
+
+        }
+
+        // --- CHARTS SETUP ---
+        const maxDataPoints = 30;
+        const labels = Array(maxDataPoints).fill('');
+        const chartOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: { beginAtZero: true, max: 100, ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                x: { display: false }
+            },
+            plugins: { legend: { display: false } },
+            animation: { duration: 0 }
+        };
+
+        const ramChart = new Chart(document.getElementById('ramChart').getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: Array(maxDataPoints).fill(0),
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 0
+                }]
+            },
+            options: chartOptions
+        });
+
+        const cpuChart = new Chart(document.getElementById('cpuChart').getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: Array(maxDataPoints).fill(0),
+                    borderColor: '#ef4444',
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 0
+                }]
+            },
+            options: chartOptions
+        });
+
+        // --- STATS POLLING ---
+        function updateStats() {
+            console.log('[DEBUG] Fetching /api/stats...');
+            fetch('/api/stats', { credentials: 'same-origin' })
+                .then(r => {
+                    console.log('[DEBUG] Response status:', r.status);
+                    return r.json();
+                })
+                .then(data => {
+                    console.log('[DEBUG] Stats data received:', data);
+
+                    // Main overview stats (with null checks - may not exist if on different tab)
+                    const statRam = document.getElementById('stat-ram');
+                    const statRamDetail = document.getElementById('stat-ram-detail');
+                    const statDisk = document.getElementById('stat-disk');
+                    const statMcUptime = document.getElementById('stat-mc-uptime');
+                    const statUptimeHost = document.getElementById('stat-uptime-host');
+                    const statTps = document.getElementById('stat-tps');
+
+                    if (statRam) statRam.innerText = data.ram_pct;
+                    if (statRamDetail) statRamDetail.innerText = data.ram_detail;
+                    if (statDisk) statDisk.innerText = data.disk_free || data.disk; // Show free space, fallback to percentage
+                    if (statMcUptime) {
+                        if (data.mc_uptime_label) {
+                            statMcUptime.innerHTML = `
+                               <span style="font-size: 0.8rem; color: var(--text-secondary);">${data.mc_uptime_label}</span>
+                               <span style="color: var(--accent); font-family: 'JetBrains Mono'; font-weight: bold; font-size: 1.3rem;">${data.mc_uptime_value}</span>
+                            `;
+                        } else {
+                            statMcUptime.innerText = data.mc_uptime_value || data.mc_uptime_full || '--';
+                        }
+                    }
+                    if (statUptimeHost) statUptimeHost.innerText = "Host: " + data.uptime;
+                    if (statTps) statTps.innerText = data.tps;
+
+                    // HEADER STATS (with null checks)
+                    const headerCpu = document.getElementById('header-stat-cpu');
+                    const headerCpuCores = document.getElementById('header-stat-cpu-cores');
+                    const headerRam = document.getElementById('header-stat-ram');
+                    const headerRamGb = document.getElementById('header-stat-ram-gb');
+                    const headerPlayers = document.getElementById('header-stat-players');
+
+                    if (headerCpu) headerCpu.innerText = data.cpu_pct;
+                    if (headerCpuCores && data.cpu_cores) {
+                        headerCpuCores.innerText = `${data.cpu_cores} cores`;
+                    }
+                    if (headerRam) headerRam.innerText = data.ram_pct;
+                    if (headerRamGb && data.ram_total_gb) {
+                        headerRamGb.innerText = `${data.ram_total_gb} GB`;
+                    }
+
+                    // Players Header Logic (with null checks)
+                    if (headerPlayers) {
+                        const maxPlayers = 20;
+                        const playerCount = data.players_count !== undefined ? data.players_count : '?';
+                        headerPlayers.innerText = `${playerCount}/${maxPlayers}`;
+                    }
+
+                    const headerHostname = document.getElementById('header-hostname');
+                    const headerIp = document.getElementById('header-ip');
+                    if (headerHostname) headerHostname.innerText = data.hostname || '';
+                    if (headerIp) headerIp.innerText = data.ip ? `(${data.ip})` : '';
+
+                    const statHostname = document.getElementById('stat-hostname');
+                    const statIp = document.getElementById('stat-ip');
+                    if (statHostname) statHostname.innerText = data.hostname || '--';
+                    if (statIp) statIp.innerText = data.ip || '--';
+
+                    const playerListEl = document.getElementById('header-players-list');
+                    if (playerListEl) {
+                        if (data.players_list && data.players_list.length > 0) {
+                            playerListEl.innerHTML = data.players_list.map(p =>
+                                `<div style="display:flex; align-items:center; gap:8px; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                                    <img src="https://cravatar.eu/helmavatar/${p}/20.png" style="width:20px; height:20px; border-radius:4px;">
+                                    <span style="color:white; font-size:13px; font-weight: 500;">${p}</span>
+                                </div>`
+                            ).join('');
+                            const tooltip = document.getElementById('header-players-tooltip');
+                            if (tooltip) tooltip.style.display = '';
+                        } else {
+                            playerListEl.innerHTML = '<span style="color: #999; font-size: 11px;">Nikdo není online</span>';
+                        }
+                    }
+
+                    // Autocomplete Update (Plugin-aware)
+                    updateCommandSuggestions(data.players_list || [], data.active_modules || []);
+
+                    // Chart updates (with null checks - charts may not exist)
+                    const ramVal = parseFloat(data.ram_pct.replace('%', ''));
+                    const cpuVal = parseFloat(data.cpu_pct.replace('%', ''));
+
+                    if (!isNaN(ramVal) && typeof ramChart !== 'undefined' && ramChart) {
+                        ramChart.data.datasets[0].data.shift();
+                        ramChart.data.datasets[0].data.push(ramVal);
+                        ramChart.update();
+                    }
+                    if (!isNaN(cpuVal) && typeof cpuChart !== 'undefined' && cpuChart) {
+                        cpuChart.data.datasets[0].data.shift();
+                        cpuChart.data.datasets[0].data.push(cpuVal);
+                        cpuChart.update();
+                    }
+
+                    const connStatus = document.getElementById('conn-status');
+                    if (connStatus) {
+                        connStatus.innerText = "Připojeno";
+                        connStatus.style.color = "var(--success)";
+                    }
+
+                    // Live Map Sync
+                    const error = document.getElementById('map-error');
+                    const frame = document.getElementById('map-frame');
+                    if (data.bluemap_url) {
+                        if (frame && !frame.src) {
+                            frame.src = data.bluemap_url;
+                        }
+                        if (error) error.style.display = 'none';
+                    } else {
+                        if (error) error.style.display = 'block';
+                        if (frame) frame.src = '';
+                    }
+                })
+                .catch(err => {
+                    console.error('[DEBUG] Error fetching stats:', err);
+                    const connStatus = document.getElementById('conn-status');
+                    if (connStatus) {
+                        connStatus.innerText = "Chyba spojení";
+                        connStatus.style.color = "var(--danger)";
+                    }
+                });
+        }
+
+        // Load player list
+        function loadPlayers() {
+            console.log('[PLAYERS] Loading player list...');
+            fetch('/players/list', { credentials: 'same-origin' })
+                .then(response => {
+                    console.log('[PLAYERS] Response status:', response.status);
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    return response.text();
+                })
+                .then(html => {
+                    console.log('[PLAYERS] Received HTML, length:', html.length);
+                    const container = document.getElementById('player-list-container');
+                    if (container) {
+                        container.innerHTML = html;
+                        // htmx.process(container); // Not needed since we use onclick now
+                        console.log('[PLAYERS] Player list updated');
+                    }
+                })
+                .catch(err => {
+                    console.error('[PLAYERS] Load error:', err);
+                    const container = document.getElementById('player-list-container');
+                    if (container) {
+                        container.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--danger);">❌ Chyba načítání hráčů<br><span style="font-size: 0.9rem;">' + err.message + '</span></div>';
+                    }
+                });
+        }
+
+        function sendAction(player, action, extraParam = null) {
+            console.log(`[ACTION] UI Click: Sending ${action} for ${player}${extraParam ? ' with ' + extraParam : ''}`);
+
+            const params = new URLSearchParams();
+            params.append('player', player);
+            params.append('action', action);
+            if (extraParam) params.append('extra', extraParam);
+
+            fetch('/api/action', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: params,
+                credentials: 'same-origin'
+            })
+                .then(r => r.json())
+                .then(data => {
+                    console.log(`[ACTION] Response for ${action}:`, data);
+                    if (data.status === 'success') {
+                        showToast(data.message || "Příkaz odeslán", "var(--success)");
+                    } else {
+                        showToast(data.message || "Chyba při provádění", "var(--danger)");
+                    }
+                })
+                .catch(err => {
+                    console.error('[ACTION] Network error:', err);
+                    showToast("Chyba spojení se serverem", "var(--danger)");
+                });
+        }
+
+        function showPlayerInfo(player) {
+            console.log(`[INFO] Requesting details for ${player}`);
+            const modal = document.getElementById('detailsModal');
+            const content = document.getElementById('detailsContent');
+            if (modal && content) {
+                content.innerHTML = `<div style="text-align:center; padding:20px;">
+                    <span style="font-size:24px; display:block; margin-bottom:10px;">🔍</span>
+                    Načítám diagnostické údaje pro <b>${player}</b>...
+                </div>`;
+                modal.classList.add('active');
+
+                const params = new URLSearchParams();
+                params.append('player', player);
+                params.append('action', 'whois');
+
+                fetch('/api/action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: params,
+                    credentials: 'same-origin'
+                })
+                    .then(r => r.json())
+                    .then(whoisData => {
+                        fetch(`/api/player/detail/${player}`)
+                            .then(dbR => dbR.json())
+                            .then(dbData => {
+                                let whoisHtml = whoisData.status === 'success' ?
+                                    `<pre style="white-space: pre-wrap; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #a5f3fc; line-height: 1.4; background: rgba(0,0,0,0.3); padding: 12px; border-radius: 6px; max-height: 150px; overflow-y: auto;">${whoisData.response || 'Žádná data'}</pre>`
+                                    : `<div style="color:var(--danger); font-size:12px;">Hráč je pravděpodobně offline (Whois selhal).</div>`;
+
+                                let sessionsHtml = '';
+                                if (dbData.status === 'success' && dbData.sessions) {
+                                    sessionsHtml = `
+                                        <div style="margin-top:20px; border-top: 1px solid var(--glass-border); padding-top:16px;">
+                                            <h4 style="margin: 0 0 12px 0; font-size: 14px; color: var(--success); display:flex; justify-content:space-between; align-items:center;">
+                                                <span>📊 Historie Přihlášení</span>
+                                                <span style="font-size:11px; background:rgba(16, 185, 129, 0.1); padding:2px 8px; border-radius:4px;">Celkem: ${dbData.total_playtime_formatted}</span>
+                                            </h4>
+                                            <div style="max-height: 250px; overflow-y: auto; border-radius: 8px; border: 1px solid var(--glass-border);">
+                                                <table style="width: 100%; border-collapse: collapse; font-size: 11px; text-align: left;">
+                                                    <thead style="background: rgba(255,255,255,0.05); position: sticky; top: 0;">
+                                                        <tr>
+                                                            <th style="padding: 8px;">Kdy (Vstup)</th>
+                                                            <th style="padding: 8px;">Doba</th>
+                                                            <th style="padding: 8px;">Odchod</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        ${dbData.sessions.map(s => `
+                                                            <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                                                                <td style="padding: 8px; color: var(--text-secondary);">${s.login_time}</td>
+                                                                <td style="padding: 8px;"><b>${s.duration ? Math.round(s.duration / 60) + ' min' : '-'}</b></td>
+                                                                <td style="padding: 8px; color: var(--text-secondary); opacity: 0.8;">${s.logout_time || '<span style="color:var(--success);">Online</span>'}</td>
+                                                            </tr>
+                                                        `).join('')}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    `;
+                                }
+
+                                content.innerHTML = `
+                                    <div style="margin-bottom:12px; font-size:12px; color:var(--text-secondary); border-bottom:1px solid var(--glass-border); padding-bottom:8px;">
+                                        🔍 Diagnostika (EssentialsX Whois)
+                                    </div>
+                                    ${whoisHtml}
+                                    ${sessionsHtml}
+                                    <div style="margin-top:20px; border-top: 1px solid var(--glass-border); padding-top:16px;">
+                                        <h4 style="margin: 0 0 12px 0; font-size: 14px; color: var(--accent);">🛠️ Vlastnosti & Úpravy</h4>
+                                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                            <div class="glass-card" style="padding: 10px; text-align: center; margin:0;">
+                                                <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">Létání (Fly)</div>
+                                                <div style="display: flex; gap: 4px; justify-content: center;">
+                                                    <button class="btn btn-outline" style="padding: 4px 8px; font-size: 10px; border-color: var(--success);" onclick="sendAction('${player}', 'set_fly_on')">ZAP</button>
+                                                    <button class="btn btn-outline" style="padding: 4px 8px; font-size: 10px; border-color: var(--danger);" onclick="sendAction('${player}', 'set_fly_off')">VYP</button>
+                                                </div>
+                                            </div>
+                                            <div class="glass-card" style="padding: 10px; text-align: center; margin:0;">
+                                                <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">Nesmrtelnost</div>
+                                                <div style="display: flex; gap: 4px; justify-content: center;">
+                                                    <button class="btn btn-outline" style="padding: 4px 8px; font-size: 10px; border-color: var(--success);" onclick="sendAction('${player}', 'set_god_on')">ZAP</button>
+                                                    <button class="btn btn-outline" style="padding: 4px 8px; font-size: 10px; border-color: var(--danger);" onclick="sendAction('${player}', 'set_god_off')">VYP</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div style="margin-top:20px; border-top: 1px solid var(--glass-border); padding-top:16px; display: flex; gap: 10px;">
+                                        <div style="flex:1;">
+                                            <label style="font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Peníze (Eco)</label>
+                                            <div style="display: flex; gap: 4px;">
+                                                <input type="number" id="edit-eco-${player}" placeholder="Částka..." style="flex:1; background: rgba(0,0,0,0.2); border: 1px solid var(--glass-border); color: white; padding: 4px 8px; border-radius: 4px; font-size:12px;">
+                                                <button class="btn btn-primary" style="padding: 4px 10px; font-size: 11px;" onclick="const val = document.getElementById('edit-eco-${player}').value; if(val) sendAction('${player}', 'set_money', val)">SET</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                `;
+                            })
+                            .catch(err => {
+                                console.error('[INFO] detail error:', err);
+                                content.innerHTML = `<div style="color:var(--danger); padding:20px;">❌ Nelze načíst data z DB</div>`;
+                            });
+                    })
+                    .catch(err => {
+                        console.error('[INFO] whois error:', err);
+                        content.innerHTML = `<div style="color:var(--danger); padding:20px;">❌ Chyba spojení</div>`;
+                    });
+            }
+        }
+
+        // --- GIFT MODAL LOGIC ---
+        let currentGiftTarget = "";
+        const giftItems = {
+            res: [
+                { id: 'diamond', name: 'Diamant', icon: '💎' },
+                { id: 'diamond_block', name: 'D. Blok', icon: '🧊' },
+                { id: 'netherite_ingot', name: 'Netherit', icon: '🧱' },
+                { id: 'gold_ingot', name: 'Zlato', icon: '🟡' },
+                { id: 'iron_ingot', name: 'Železo', icon: '⚪' },
+                { id: 'ancient_debris', name: 'Debris', icon: '🪨' },
+                { id: 'emerald', name: 'Smaragd', icon: '🟢' },
+                { id: 'lapis_lazuli', name: 'Lapis', icon: '🔵' }
+            ],
+            combat: [
+                { id: 'netherite_sword', name: 'N. Meč', icon: '🗡️' },
+                { id: 'elytra', name: 'Elytra', icon: '🦋' },
+                { id: 'totem_of_undying', name: 'Totem', icon: '🏺' },
+                { id: 'enchanted_golden_apple', name: 'OP Jablko', icon: '🍎' },
+                { id: 'bow', name: 'Luk', icon: '🏹' },
+                { id: 'arrow', name: 'Šípy (64)', icon: '🎯', count: 64 },
+                { id: 'netherite_chestplate', name: 'N. Brnění', icon: '🛡️' },
+                { id: 'tnt', name: 'TNT', icon: '🧨' }
+            ],
+            food: [
+                { id: 'steak', name: 'Steak', icon: '🥩' },
+                { id: 'cooked_chicken', name: 'Kuře', icon: '🍗' },
+                { id: 'golden_carrot', name: 'Mrkev', icon: '🥕' },
+                { id: 'bread', name: 'Chleba', icon: '🍞' },
+                { id: 'cake', name: 'Dort', icon: '🎂' },
+                { id: 'potion', name: 'Lektvar', icon: '🧪' }
+            ],
+            tools: [
+                { id: 'netherite_pickaxe', name: 'N. Krumpáč', icon: '⛏️' },
+                { id: 'netherite_axe', name: 'N. Sekyra', icon: '🪓' },
+                { id: 'netherite_shovel', name: 'N. Lopata', icon: '🥄' },
+                { id: 'experience_bottle', name: 'Exp (64)', icon: '✨', count: 64 },
+                { id: 'shulker_box', name: 'Shulker', icon: '📦' },
+                { id: 'ender_pearl', name: 'Perla', icon: '🔮' },
+                { id: 'rocket', name: 'Rakety (64)', icon: '🚀', count: 64 }
+            ]
+        };
+
+        function openGiftModal(player) {
+            currentGiftTarget = player;
+            document.getElementById('giftModalTitle').innerText = `Darovat hráči: ${player} `;
+
+            // Populate grids
+            for (const cat in giftItems) {
+                const grid = document.getElementById(`gift - ${cat} `);
+                if (!grid) continue;
+
+                grid.innerHTML = giftItems[cat].map(item => `
+                    < div class="gift-item-card" onclick = "giveModalItem('${item.id}', ${item.count || 1})" >
+                        <div style="font-size: 24px; margin-bottom: 4px;">${item.icon}</div>
+                        <div style="font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; text-align: center;">${item.name}</div>
+                    </div >
+                    `).join('');
+            }
+
+            document.getElementById('giftModal').classList.add('active');
+        }
+
+        function giveModalItem(itemId, count) {
+            if (!currentGiftTarget) return;
+            // Use the existing sendAction logic
+            // We need to modify the give_custom command on backend to handle count? Let's just give 1 for now or 64 if specified
+            const cmd = count > 1 ? `${itemId} ${count} ` : itemId;
+            sendAction(currentGiftTarget, 'give_custom', cmd);
+            // Don't close modal, maybe teacher wants to give more things
+        }
+
+        // --- WHITELIST LOGIC ---
+        function loadWhitelist() {
+            fetch('/api/whitelist', { credentials: 'same-origin' })
+                .then(r => r.json())
+                .then(players => {
+                    const container = document.getElementById('whitelist-tags');
+                    container.innerHTML = players.map(p => `
+                    < div class="module-badge" style = "display:inline-flex; align-items:center; gap:8px; margin:4px;" >
+                        ${p} <span onclick="removeFromWhitelist('${p}')" style="cursor:pointer; color:var(--danger); font-weight:bold;">&times;</span>
+                        </div >
+                    `).join('');
+                });
+        }
+
+        function addToWhitelist() {
+            const el = document.getElementById('whitelist-input');
+            const name = el.value.trim();
+            if (!name) return;
+            const fd = new FormData(); fd.append('name', name);
+            fetch('/api/whitelist/add', { credentials: 'same-origin', method: 'POST', body: fd }).then(() => { el.value = ''; loadWhitelist(); });
+        }
+
+        function removeFromWhitelist(name) {
+            const fd = new FormData(); fd.append('name', name);
+            fetch('/api/whitelist/remove', { credentials: 'same-origin', method: 'POST', body: fd }).then(() => loadWhitelist());
+        }
+
+
+        // --- BANLIST LOGIC ---
+        function loadBanlist() {
+            fetch('/api/banlist', { credentials: 'same-origin' })
+                .then(r => r.json())
+                .then(players => {
+                    const container = document.getElementById('banlist-tags');
+                    container.innerHTML = players.map(p => `
+                    < div class="module-badge" style = "display:inline-flex; align-items:center; gap:8px; margin:4px; border-color: rgba(239, 68, 68, 0.3);" >
+                        ${p} <span onclick="removeFromBanlist('${p}')" style="cursor:pointer; color:var(--danger); font-weight:bold;">&times;</span>
+                        </div >
+                    `).join('');
+                });
+        }
+
+        function addToBanlist() {
+            const el = document.getElementById('banlist-input');
+            const reasonEl = document.getElementById('banlist-reason');
+            const name = el.value.trim();
+            const reason = reasonEl.value.trim();
+
+            if (!name) return;
+            const fd = new FormData();
+            fd.append('name', name);
+            if (reason) fd.append('reason', reason);
+
+            fetch('/api/banlist/add', { credentials: 'same-origin', method: 'POST', body: fd }).then(() => {
+                el.value = '';
+                reasonEl.value = '';
+                loadBanlist();
+                showToast(`Hráč ${name} byl zabanován`, "var(--danger)");
+                htmx.trigger('#player-list-container', 'load');
+            });
+        }
+
+
+        function removeFromBanlist(name) {
+            showConfirm("Zrušit Ban", `Opravdu chcete odbanovat hráče ${name}?`, () => {
+                const fd = new FormData(); fd.append('name', name);
+                fetch('/api/banlist/remove', { credentials: 'same-origin', method: 'POST', body: fd }).then(() => {
+                    loadBanlist();
+                    showToast(`Hráč ${name} byl odblokován`, "var(--success)");
+                });
+            });
+        }
+
+
+
+        function addToBanlistManual(name) {
+            const fd = new FormData(); fd.append('name', name);
+            fetch('/api/banlist/add', { credentials: 'same-origin', method: 'POST', body: fd }).then(() => {
+                loadBanlist();
+                showToast(`Hráč ${name} byl zabanován`, "var(--danger)");
+                htmx.trigger('#player-list-container', 'load');
+            });
+        }
+
+        // --- MODULES & WIKI ---
+        let activeModules = {};
+        function loadModules() {
+            fetch('/api/modules', { credentials: 'same-origin' })
+                .then(r => r.json())
+                .then(data => {
+                    activeModules = data;
+                    for (const [id, enabled] of Object.entries(data)) {
+                        const el = document.getElementById('mod-' + id);
+                        if (el) enabled ? el.classList.add('active') : el.classList.remove('active');
+                    }
+                });
+        }
+
+        function toggleModule(id) {
+            // Immediate UI update - toggle active class
+            const moduleEl = document.getElementById('mod-' + id);
+            const wasActive = activeModules[id];
+            const newState = !wasActive;
+
+            // Update local state immediately
+            activeModules[id] = newState;
+
+            // Update UI immediately
+            if (moduleEl) {
+                if (newState) {
+                    moduleEl.classList.add('active');
+                } else {
+                    moduleEl.classList.remove('active');
+                }
+            }
+
+            // Send to backend (async, don't wait)
+            const fd = new FormData();
+            fd.append('id', id);
+            fd.append('enabled', newState);
+            fetch('/api/modules/toggle', { credentials: 'same-origin', method: 'POST', body: fd })
+                .then(response => {
+                    console.log('[MODULE] Toggle response:', response.status);
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('[MODULE] Toggle data:', data);
+                    console.log('[MODULE] Reloading wiki table...');
+                    // Reload wiki table to show/hide commands
+                    htmx.ajax('GET', '/api/wiki', { target: '#wiki-container' });
+                    console.log('[MODULE] Wiki reload triggered');
+                })
+                .catch(err => {
+                    console.error('Toggle module error:', err);
+                    // Revert on error
+                    activeModules[id] = wasActive;
+                    if (moduleEl) {
+                        wasActive ? moduleEl.classList.add('active') : moduleEl.classList.remove('active');
+                    }
+                });
+        }
+
+        function toggleFavorite(cmdId) {
+            console.log('[DEBUG] Toggling favorite:', cmdId);
+
+            // Send to backend
+            const fd = new FormData();
+            fd.append('id', cmdId);
+            fetch('/api/commands/favorite/toggle', { credentials: 'same-origin', method: 'POST', body: fd })
+                .then(response => {
+                    console.log('[DEBUG] Favorite toggle response:', response.status);
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('[DEBUG] Favorite toggle data:', data);
+                    // Reload wiki table to update star states
+                    htmx.ajax('GET', '/api/wiki', { target: '#wiki-container' });
+                })
+                .catch(err => {
+                    console.error('[DEBUG] Favorite toggle error:', err);
+                });
+        }
+
+        // --- UTILS ---
+        function loadLogs() {
+            fetch('/api/logs', { credentials: 'same-origin' }).then(r => r.json()).then(logs => {
+                const el = document.getElementById('server-logs');
+                el.innerText = logs;
+                el.scrollTop = el.scrollHeight;
+            });
+        }
+
+        function runBackup() {
+            if (!confirm("Spustit zálohu?")) return;
+            showToast("Zálohování běží...", "var(--accent)");
+            fetch('/api/backup', { credentials: 'same-origin', method: 'POST' })
+                .then(r => r.json())
+                .then(d => showToast(d.message, d.status === 'success' ? "var(--success)" : "var(--danger)"));
+        }
+
+        function showToast(msg, color) {
+            const t = document.getElementById('toast');
+            t.innerText = msg; t.style.backgroundColor = color; t.style.display = 'block';
+            setTimeout(() => t.style.display = 'none', 5000);
+        }
+
+        // Init
+        updateStats(); loadWhitelist(); loadBanlist(); loadModules(); loadLogs(); loadPlayers();
+        setInterval(updateStats, 5000);
+        setInterval(loadPlayers, 10000);
+        setInterval(loadLogs, 15000);
+        setInterval(loadBanlist, 30000);
+        // --- ATTENDANCE & CONFIG LOGIC ---
+        function loadAttendance() {
+            const list = document.getElementById('attendance-list');
+            list.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px; color:var(--text-secondary);">Načítám...</td></tr>';
+
+            fetch('/api/attendance', { credentials: 'same-origin' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.length === 0) {
+                        list.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px;">Zatím žádná zaznamenaná aktivita.</td></tr>';
+                        return;
+                    }
+                    list.innerHTML = data.map(row => `
+                    < tr style = "border-bottom: 1px solid rgba(255,255,255,0.05);" >
+                            <td style="padding:12px;"><b>${row.player_name}</b></td>
+                            <td style="padding:12px; font-size:12px; color:var(--text-secondary);">${row.login_time}</td>
+                            <td style="padding:12px; font-size:12px;">${row.logout_time || '<span style="color:var(--success);">Právě online</span>'}</td>
+                            <td style="padding:12px;">${row.logout_time ? Math.round(row.duration / 60) + ' min' : '-'}</td>
+                        </tr >
+                    `).join('');
+                });
+        }
+
+        function loadServerProperties() {
+            const container = document.getElementById('config-editor-container');
+            container.innerHTML = '<div style="padding:40px; text-align:center;">Načítám...</div>';
+
+            fetch('/api/config/server_properties', { credentials: 'same-origin' })
+                .then(r => r.json())
+                .then(props => {
+                    container.innerHTML = `
+                    < div style = "display: grid; grid-template-columns: 240px 160px 1fr; gap: 24px; padding: 12px 20px; border-bottom: 2px solid var(--glass-border); font-weight: bold; font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.1em; background: rgba(255,255,255,0.02); align-items: center;" >
+                            <div>Parametr</div>
+                            <div style="text-align: center;">Aktuální hodnota</div>
+                            <div style="padding-left: 10px;">Vysvětlení a popis</div>
+                        </div >
+                    <div style="max-height: 600px; overflow-y: auto;">
+                        ${props.map(p => `
+                                <div class="config-row" style="display: grid; grid-template-columns: 240px 160px 1fr; gap: 24px; align-items: center; padding: 10px 20px; border-bottom: 1px solid rgba(255,255,255,0.03);">
+                                    <div style="font-family: 'JetBrains Mono', 'Courier New', monospace; font-size: 13px; color: var(--accent); overflow: hidden; text-overflow: ellipsis; font-weight: 500;" title="${p.key}">${p.key}</div>
+                                    <div style="display: flex; justify-content: center;">
+                                        <input type="text" class="console-field prop-input" data-key="${p.key}" value="${p.value}" 
+                                               style="width: 100%; max-width: 140px; font-size: 13px; padding: 4px 12px; border-radius: 4px; border: 1px solid var(--glass-border); background: rgba(0,0,0,0.2); height: 32px; color: #fff; text-align: center;">
+                                    </div>
+                                    <div style="font-size: 13px; color: var(--text-secondary); opacity: 0.9; line-height: 1.4; padding-left: 10px;">${p.help || '<i style="color:rgba(255,255,255,0.2);">Popis není k dispozici</i>'}</div>
+                                </div>
+                            `).join('')}
+                    </div>
+                `;
+                });
+        }
+
+        function saveServerProperties() {
+            const inputs = document.querySelectorAll('.prop-input');
+            const data = Array.from(inputs).map(i => ({ key: i.dataset.key, value: i.value }));
+
+            showToast("Ukládám nastavení...", "var(--accent)");
+            fetch('/api/config/server_properties/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data),
+                credentials: 'same-origin'
+            })
+                .then(r => r.json())
+                .then(d => {
+                    showToast(d.message, d.status === 'success' ? "var(--success)" : "var(--danger)");
+                });
+        }
+        function loadPlugins() {
+            const tbody = document.getElementById('plugins-table-body');
+            tbody.innerHTML = '<tr><td colspan="2" style="padding:20px; text-align:center; color:var(--text-secondary);">Načítám...</td></tr>';
+
+            fetch('/api/plugins', { credentials: 'same-origin' })
+                .then(r => r.json())
+                .then(plugins => {
+                    if (plugins.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="2" style="padding:20px; text-align:center;">Žádné pluginy nenalezeny.</td></tr>';
+                        return;
+                    }
+                    tbody.innerHTML = plugins.map(p => `
+                    < tr style = "border-bottom: 1px solid rgba(255,255,255,0.05);" >
+                            <td style="padding: 12px 16px; font-family: monospace; color: ${p.enabled ? 'var(--text-primary)' : 'var(--text-disabled)'};">
+                                ${p.name}
+                            </td>
+                            <td style="padding: 12px 16px; text-align: center;">
+                                <label class="switch" style="position: relative; display: inline-block; width: 34px; height: 18px;">
+                                    <input type="checkbox" ${p.enabled ? 'checked' : ''} onchange="togglePlugin('${p.name}', this.checked)" style="opacity: 0; width: 0; height: 0;">
+                                    <span class="slider round" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #333; transition: .4s; border-radius: 34px;"></span>
+                                </label>
+                            </td>
+                        </tr >
+                    `).join('');
+
+                    // Add slider CSS if not exists (inline style for slider :before cannot be done easily in JS map, using style block in header recommended, but inline workarounds exist)
+                    // Better verify if dashboard has toggle switch CSS. Assuming no, adding style block to plugins partial or main css would be better.
+                    // For now, I will assume standard checkbox or add simple style.
+                    // Actually, let's inject a style tag for the switch.
+                });
+        }
+
+        function togglePlugin(name, enabled) {
+            const fd = new FormData();
+            fd.append('name', name);
+            fd.append('enabled', enabled);
+
+            fetch('/api/plugins/toggle', { credentials: 'same-origin', method: 'POST', body: fd })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        showToast(`Plugin ${name} ${enabled ? 'zapnut' : 'vypnut'}. Restartujte server!`, "var(--warning)");
+                        loadPlugins();
+                    } else {
+                        showToast(`Chyba: ${data.message} `, "var(--danger)");
+                        loadPlugins(); // revert toggle
+                    }
+                });
+        }
+
+        // --- POWER & ACTIONS ---
+
+        function checkServerStatus() {
+            fetch('/api/power/status', { credentials: 'same-origin' })
+                .then(r => r.json())
+                .then(data => {
+                    const badge = document.getElementById('power-status-badge');
+                    if (!badge) return;
+
+                    if (data.status === 'running') {
+                        badge.style.background = 'var(--success)';
+                        badge.style.boxShadow = '0 0 8px var(--success)';
+                        badge.title = 'Online (Běží)';
+                    } else if (data.status === 'exited') {
+                        badge.style.background = 'var(--danger)';
+                        badge.style.boxShadow = 'none';
+                        badge.title = 'Offline (Vypnuto)';
+                    } else if (data.status === 'restarting') {
+                        badge.style.background = 'var(--warning)';
+                        badge.style.boxShadow = '0 0 8px var(--warning)';
+                        badge.title = 'Restarting...';
+                    } else {
+                        badge.style.background = '#666';
+                        badge.style.boxShadow = 'none';
+                        badge.title = `Stav: ${data.status} `;
+                    }
+                })
+                .catch(() => {
+                    const badge = document.getElementById('power-status-badge');
+                    if (badge) badge.style.background = '#666';
+                });
+        }
+
+        // Start status check loop (interval 3s)
+        setInterval(checkServerStatus, 3000);
+        setTimeout(checkServerStatus, 1000); // First check soon
+
+        // --- MODAL LOGIC ---
+        let modalConfirmCallback = null;
+
+        function closeModal() {
+            document.getElementById('custom-modal').classList.remove('active');
+        }
+
+        function showConfirm(title, message, callback) {
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('modal-message').innerText = message;
+            modalConfirmCallback = callback;
+            document.getElementById('custom-modal').classList.add('active');
+        }
+
+        document.getElementById('modal-confirm-btn').onclick = function () {
+            if (modalConfirmCallback) modalConfirmCallback();
+            closeModal();
+        };
+
+        // HTMX Confirm Hook
+        document.body.addEventListener('htmx:confirm', function (evt) {
+            evt.preventDefault();
+            // Pokud není definována otázka (asi nějaký trigger omylem?), nic nedělat.
+            if (!evt.detail.question) return;
+
+            showConfirm('Potvrzení akce', evt.detail.question, function () {
+                evt.detail.issueRequest(true); // Pokračovat v HTMX requestu
+            });
+        });
+
+        // --- SYSTEM CONFIG ---
+        function loadSystemConfig() {
+            fetch('/api/config/system', { credentials: 'same-origin' })
+                .then(r => r.json())
+                .then(data => {
+                    document.getElementById('sys-ssh-host').value = data.ssh_host || '';
+                    document.getElementById('sys-ssh-port').value = data.ssh_port || '22';
+                    document.getElementById('sys-ssh-user').value = data.ssh_user || '';
+                    document.getElementById('sys-ssh-pass').value = data.ssh_password || '';
+                    document.getElementById('sys-rcon-host').value = data.rcon_host || 'localhost';
+                    document.getElementById('sys-rcon-port').value = data.rcon_port || '25575';
+                    document.getElementById('sys-rcon-pass').value = data.rcon_password || '';
+                    document.getElementById('sys-bluemap-url').value = data.bluemap_url || '';
+                });
+        }
+
+        function saveSystemConfig() {
+            const data = {
+                ssh_host: document.getElementById('sys-ssh-host').value,
+                ssh_port: document.getElementById('sys-ssh-port').value,
+                ssh_user: document.getElementById('sys-ssh-user').value,
+                ssh_password: document.getElementById('sys-ssh-pass').value,
+                rcon_host: document.getElementById('sys-rcon-host').value,
+                rcon_port: document.getElementById('sys-rcon-port').value,
+                rcon_password: document.getElementById('sys-rcon-pass').value,
+                bluemap_url: document.getElementById('sys-bluemap-url').value
+            };
+
+            fetch('/api/config/system', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data),
+                credentials: 'same-origin'
+            })
+                .then(r => r.json())
+                .then(res => {
+                    showToast(res.message || 'Nastavení uloženo.', 'success');
+                })
+                .catch(err => showToast('Chyba při ukládání: ' + err, 'error'));
+        }
+
+        // --- UPDATED ACTIONS ---
+        function serverAction(action) {
+            showConfirm("Ovládání Serveru", `Opravdu chcete provést akci: ${action.toUpperCase()}?`, () => {
+                // Visual feedback
+                const badge = document.getElementById('power-status-badge');
+                if (badge) {
+                    badge.style.background = 'var(--accent)';
+                    badge.style.boxShadow = '0 0 8px var(--accent)';
+                    badge.title = 'Provádím akci...';
+                }
+
+                fetch(`/ api / power / ${action} `, { method: 'POST' })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            showToast(`Server ${action}: OK`, "var(--success)");
+                        }
+                        else showToast(`Chyba: ${data.message} `, "var(--danger)");
+                    });
+            });
+        }
+
+        function clearInventory(playerName) {
+            showConfirm("Anti-Grief", `Smazat inventář hráči ${playerName}? Tato akce je nevratná!`, () => {
+                const fd = new FormData(); fd.append('name', playerName);
+                fetch('/api/action/clear', { credentials: 'same-origin', method: 'POST', body: fd })
+                    .then(r => r.json())
+                    .then(data => {
+                        showToast(`Inventář ${playerName} vymazán`, "var(--success)");
+                    });
+            });
+        }
+
+        // --- CONSOLE ---
+        function sendHeaderConsoleCommand() {
+            const el = document.getElementById('header-console-input');
+            const cmd = el.value.trim();
+            if (!cmd) return;
+
+            // Optimistic animation context
+            el.disabled = true;
+            el.style.opacity = "0.5";
+
+            const fd = new FormData();
+            fd.append('command', cmd);
+
+            fetch('/api/console/send', { credentials: 'same-origin', method: 'POST', body: fd })
+                .then(r => r.json())
+                .then(data => {
+                    el.disabled = false;
+                    el.style.opacity = "1";
+
+                    if (data.status === 'success') {
+                        showToast(`⚡ ${cmd}: ${data.response || 'Provedeno'}`, "var(--success)");
+                        el.value = '';
+
+                        // Pokud jsme v konzoli, aktualizujeme i tam
+                        const consoleOutput = document.getElementById('console-output');
+                        if (consoleOutput) {
+                            consoleOutput.innerHTML += `<div class="log-entry" style="color: grey;">&gt; ${cmd} (z hlavičky)</div>`;
+                            consoleOutput.innerHTML += `<div class="log-entry" style="color: var(--text-primary);">${data.response}</div>`;
+                            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+                        }
+                    } else {
+                        showToast("Chyba příkazu", "var(--danger)");
+                    }
+                })
+                .catch(err => {
+                    el.disabled = false;
+                    el.style.opacity = "1";
+                    console.error("Header console error:", err);
+                    showToast("Chyba odesílání", "var(--danger)");
+                });
+        }
+
+        function sendConsoleCommand() {
+            try {
+                const el = document.getElementById('console-input');
+                const cmd = el.value.trim();
+                if (!cmd) return;
+
+                // Optimistic update - píšeme do VLASTNÍHO okna konzole, ne do logů
+                const consoleOutput = document.getElementById('console-output');
+                consoleOutput.innerHTML += `< div class="log-entry" style = "color: grey;" >& gt; ${cmd}</div > `;
+                consoleOutput.scrollTop = consoleOutput.scrollHeight;
+                el.value = '';
+
+                const fd = new FormData(); fd.append('command', cmd);
+                fetch('/api/console/send', { credentials: 'same-origin', method: 'POST', body: fd })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            consoleOutput.innerHTML += `< div class="log-entry" style = "color: var(--text-primary);" > ${data.response}</div >`;
+                            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+                        } else {
+                            showToast("Chyba příkazu", "var(--danger)");
+                        }
+                    })
+                    .catch(err => {
+                        console.error("Console error:", err);
+                        showToast("Chyba odesílání", "var(--danger)");
+                    });
+            } catch (e) {
+                console.error("Console JS error:", e);
+                alert("JS Error: " + e);
+            }
+        }
+
+        // --- INITIALIZATION ---
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log("Dashboard Initialized");
+
+            // Restore active tab from URL hash
+            const hash = window.location.hash.substring(1);
+            if (hash && ['overview', 'players', 'console', 'plugins', 'wiki', 'history', 'manual', 'config', 'settings'].includes(hash)) {
+                showSection(hash);
+            } else {
+                showSection('overview');
+            }
+
+            loadBanlist();
+            loadWhitelist();
+            checkServerStatus();
+            updateCommandSuggestions([]); // Initial call to populate base commands
+        });
+
+        // --- SUGGESTIONS ---
+        function updateCommandSuggestions(onlinePlayers, activeModules = []) {
+            const datalist = document.getElementById('command-suggestions');
+            if (!datalist) return;
+
+            // Base commands - filtered by active module if applicable (base is always active)
+            const commandsRepo = [
+                { module: 'base', cmd: "/time set day" },
+                { module: 'base', cmd: "/weather clear" },
+                { module: 'base', cmd: "/gamemode creative" },
+                { module: 'base', cmd: "/gamemode survival" },
+                { module: 'base', cmd: "/kick " },
+                { module: 'base', cmd: "/tp " },
+                { module: 'base', cmd: "/ban " },
+                { module: 'base', cmd: "/pardon " },
+                { module: 'base', cmd: "/op " },
+                { module: 'base', cmd: "/deop " },
+                { module: 'base', cmd: "/whitelist add " },
+                { module: 'base', cmd: "/whitelist remove " },
+                { module: 'base', cmd: "/save-all" },
+                { module: 'base', cmd: "/stop" },
+                { module: 'worldedit', cmd: "//wand" },
+                { module: 'worldedit', cmd: "//set " },
+                { module: 'worldedit', cmd: "//copy" },
+                { module: 'worldedit', cmd: "//paste" },
+                { module: 'essentialsx', cmd: "/spawn" },
+                { module: 'essentialsx', cmd: "/setspawn" },
+                { module: 'bluemap', cmd: "/bluemap update" }
+            ];
+
+            // Filter static commands based on active modules
+            const filteredBase = commandsRepo
+                .filter(c => activeModules.length === 0 || activeModules.includes(c.module))
+                .map(c => c.cmd);
+
+            let html = filteredBase.map(cmd => `<option value="${cmd}">`).join('');
+
+            // Přidat online hráče pro našeptávání parametrů (Inteligentní návrhy v6.3+)
+            if (onlinePlayers && onlinePlayers.length > 0) {
+                onlinePlayers.forEach(p => {
+                    // Base player commands
+                    html += `<option value="/tp ${p}">`;
+                    html += `<option value="/kick ${p}">`;
+                    html += `<option value="/op ${p}">`;
+                    html += `<option value="/deop ${p}">`;
+                    html += `<option value="/whitelist add ${p}">`;
+                    html += `<option value="/whitelist remove ${p}">`;
+
+                    // EssentialsX specific player commands
+                    if (activeModules.length === 0 || activeModules.includes('essentialsx')) {
+                        html += `<option value="/mute ${p}">`;
+                        html += `<option value="/unmute ${p}">`;
+                        html += `<option value="/freeze ${p}">`;
+                        html += `<option value="/unfreeze ${p}">`;
+                        html += `<option value="/invsee ${p}">`;
+                        html += `<option value="/gamemode creative ${p}">`;
+                        html += `<option value="/gamemode survival ${p}">`;
+                        html += `<option value="/heal ${p}">`;
+                        html += `<option value="/feed ${p}">`;
+                        html += `<option value="/clear ${p}">`;
+                    }
+                });
+            }
+
+            datalist.innerHTML = html;
+        }
+
+        // Upravit existující listenery pro aktualizaci našeptávače
+        document.body.addEventListener('htmx:afterRequest', function (evt) {
+            // Toast handling for JSON responses
+            if (evt.detail.xhr.status === 200 && evt.detail.xhr.getResponseHeader('Content-Type')?.includes('application/json')) {
+                try {
+                    const resp = JSON.parse(evt.detail.xhr.responseText);
+                    if (resp.status === 'success' && resp.message) {
+                        showToast(resp.message, "var(--success)");
+                    } else if (resp.status === 'error') {
+                        showToast(resp.message || "Chyba při provádění akce", "var(--danger)");
+                    }
+                } catch (e) { }
+            }
+
+            // Intelligent Autocomplete (v6.3)
+            const onlineHeader = evt.detail.xhr.getResponseHeader('X-Online-Players');
+            if (onlineHeader !== null) {
+                const onlineNames = onlineHeader ? onlineHeader.split(',') : [];
+                console.log("[Autocomplete] Updating with names:", onlineNames);
+                updateCommandSuggestions(onlineNames);
+            }
+        });
+    </script>
+
+</body>
+
+</html>

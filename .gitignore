@@ -1,0 +1,47 @@
+# Add to .gitignore to protect sensitive data
+
+# Environment and secrets
+.env
+*.env
+!.env.example
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+data/
+mc_panel.db
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Docker
+docker-compose.override.yml
+
+# Temporary files
+tmp/
+temp/
+*.tmp

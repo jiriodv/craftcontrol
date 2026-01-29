@@ -1,0 +1,162 @@
+{% if players %}
+<div class="player-grid">
+    {% for player in players %}
+    <div class="glass-card"
+        style="padding: 16px; margin-bottom: 0; {% if not player.is_online %}opacity: 0.7; filter: grayscale(1);{% endif %}">
+        <div style="display: flex; align-items: flex-start; gap: 16px; margin-bottom: 20px;">
+            <img src="{{ player.avatar_url }}" alt="{{ player.name }}"
+                style="width: 54px; height: 54px; border-radius: 12px; border: 2px solid var(--glass-border);">
+            <div style="flex: 1;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <h3 style="margin: 0; font-size: 1.1rem;">{{ player.name }}</h3>
+                    <div style="display: flex; gap: 4px;">
+                        <button class="btn btn-outline"
+                            style="padding: 2px 8px; font-size: 10px; border-color: cyan; color: cyan;"
+                            onclick="showPlayerInfo('{{ player.name }}')">
+                            🔍 INFO
+                        </button>
+                    </div>
+                </div>
+                <div style="font-size: 12px; color: var(--text-secondary); margin: 4px 0;">{{ player.group }}</div>
+
+                {% if player.is_online %}
+                <span class="module-badge"
+                    style="background: rgba(16, 185, 129, 0.1); color: var(--success); font-size: 10px;">ONLINE</span>
+                {% else %}
+                <span class="module-badge"
+                    style="background: rgba(148, 163, 184, 0.1); color: var(--text-secondary); font-size: 10px;">OFFLINE
+                    ({{ player.last_seen }})</span>
+                {% endif %}
+
+                <div
+                    style="font-size: 10px; color: var(--text-secondary); margin-top: 6px; display: flex; align-items: center; gap: 4px;">
+                    ⌛ <b>Odehráno:</b> {{ player.playtime_formatted }}
+                </div>
+            </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 6px;">
+            <!-- ZÁKLADNÍ AKCE (Online Only) -->
+            <button class="btn btn-outline" style="border-color: var(--danger);"
+                onclick="sendAction('{{ player.name }}', 'heal')" title="Uzdravit" {% if not player.is_online
+                %}disabled{% endif %}>
+                ❤️ Heal
+            </button>
+            <button class="btn btn-outline" style="border-color: #f97316;"
+                onclick="sendAction('{{ player.name }}', 'feed')" title="Doplnit hlad" {% if not player.is_online
+                %}disabled{% endif %}>
+                🍖 Feed
+            </button>
+            <button class="btn btn-outline" style="border-color: var(--accent);"
+                onclick="sendAction('{{ player.name }}', 'teleport_here')" title="Přitáhnout k sobě" {% if not
+                player.is_online %}disabled{% endif %}>
+                📍 Pull
+            </button>
+            <button class="btn btn-outline" style="border-color: #94a3b8;"
+                onclick="sendAction('{{ player.name }}', 'spawn')" title="Poslat na Spawn" {% if not player.is_online
+                %}disabled{% endif %}>
+                🏠 Spawn
+            </button>
+
+            <!-- GAMEMODES (Online Only) -->
+            <button class="btn btn-outline" style="border-color: #94a3b8;"
+                onclick="sendAction('{{ player.name }}', 'gamemode_survival')" title="Survival" {% if not
+                player.is_online %}disabled{% endif %}>
+                ⛏️ GMS
+            </button>
+            <button class="btn btn-outline" style="border-color: var(--accent);"
+                onclick="sendAction('{{ player.name }}', 'gamemode_creative')" title="Creative" {% if not
+                player.is_online %}disabled{% endif %}>
+                🎨 GMC
+            </button>
+            <button class="btn btn-outline" style="border-color: #8b5cf6;"
+                onclick="sendAction('{{ player.name }}', 'gamemode_spectator')" title="Spectator" {% if not
+                player.is_online %}disabled{% endif %}>
+                👁️ GMSP
+            </button>
+            <!-- FREE SPACE / PLACEHOLDER -->
+            <div></div>
+
+            <!-- ADMIN NÁSTROJE -->
+            <button class="btn btn-outline" style="border-color: #fbbf24;"
+                onclick="if(confirm('Udělit OP?')) sendAction('{{ player.name }}', 'op')" {% if not player.is_online
+                %}disabled{% endif %}>
+                ⭐ OP
+            </button>
+            <button class="btn btn-outline" style="border-color: #ec4899;"
+                onclick="sendAction('{{ player.name }}', 'clear_effects')" title="Smazat efekty" {% if not
+                player.is_online %}disabled{% endif %}>
+                🧪 Milk
+            </button>
+
+            <!-- OFFLINE ALLOWED ACTIONS -->
+            <button class="btn btn-outline" style="border-color: #fca5a5; color: #fca5a5;"
+                onclick="if(confirm('Opravdu resetovat heslo hráče {{ player.name }}?')) sendAction('{{ player.name }}', 'authme_unregister')"
+                title="Reset hesla (Unregister)">
+                🔑 Unreg
+            </button>
+
+            <button class="btn btn-outline" style="border-color: #f59e0b;"
+                onclick="sendAction('{{ player.name }}', 'mute')" title="Ztišit na 5m" {% if not player.is_online
+                %}disabled{% endif %}>
+                🔇 Mute
+            </button>
+
+            <!-- FREEZE & INFO (Online Only) -->
+            <button class="btn btn-outline" style="border-color: #06b6d4;"
+                onclick="sendAction('{{ player.name }}', 'freeze')" title="Zamrazit (Slowness)" {% if not
+                player.is_online %}disabled{% endif %}>
+                ❄️ Freeze
+            </button>
+            <button class="btn btn-outline" style="border-color: #94a3b8;"
+                onclick="sendAction('{{ player.name }}', 'unfreeze')" title="Odmrazit" {% if not player.is_online
+                %}disabled{% endif %}>
+                🔥 Unfrz
+            </button>
+            <button class="btn btn-outline" style="border-color: #10b981;"
+                onclick="sendAction('{{ player.name }}', 'get_pos')" title="Získat pozici" {% if not player.is_online
+                %}disabled{% endif %}>
+                📍 Pos
+            </button>
+            <!-- FREE SPACE -->
+            <div></div>
+
+            <!-- GIFTING / GIVE ANYTHING (Online Only) -->
+            <div style="grid-column: span 4; margin-top: 8px;">
+                <button class="btn btn-primary"
+                    style="width: 100%; justify-content: center; background: var(--accent-gradient); border: none; font-weight: 600; padding: 10px;"
+                    onclick="openGiftModal('{{ player.name }}')" {% if not player.is_online %}disabled
+                    style="opacity: 0.5; cursor: not-allowed;" {% endif %}>
+                    🎁 DAROVAT PŘEDMĚT
+                </button>
+            </div>
+
+            <!-- MODULOVÉ AKCE (SPECIÁLNÍ) -->
+            <!-- ... (Keeping existing structure, AuthMe Unreg is already covered above) ... -->
+
+            <!-- KRITICKÉ AKCE (BAN WORKS OFFLINE) -->
+            <div
+                style="grid-column: span 4; display: flex; gap: 4px; border-top: 1px solid var(--glass-border); padding-top: 8px; margin-top: 4px;">
+                <button class="btn" style="background: var(--danger); flex: 1; justify-content: center;"
+                    onclick="if(confirm('Zabanovat hráče {{ player.name }}?')) addToBanlistManual('{{ player.name }}')">
+                    🚫 Ban
+                </button>
+                <button class="btn" style="background: #1e293b; flex: 1; justify-content: center;"
+                    onclick="sendAction('{{ player.name }}', 'kick')" {% if not player.is_online %}disabled{% endif %}>
+                    🥾 Kick
+                </button>
+                <button class="btn"
+                    style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); flex: 2; justify-content: center;"
+                    onclick="clearInventory('{{ player.name }}')" {% if not player.is_online %}disabled{% endif %}>
+                    🗑️ Clear Inv
+                </button>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+    <p>Žádní hráči nejsou online.</p>
+</div>
+{% endif %}

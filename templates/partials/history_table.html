@@ -1,0 +1,50 @@
+<div class="history-controls" style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center;">
+    <label>Filtr Skupiny:</label>
+    <select hx-get="/history/table" hx-target="#history-table-container" name="group"
+        style="background: #333; color: white; border: none; padding: 5px; border-radius: 4px;">
+        <option value="all" {% if current_filter=='all' %}selected{% endif %}>Všechny</option>
+        {% for grp in groups %}
+        {% if grp != 'Nezařazeno' %}
+        <option value="{{ grp }}" {% if current_filter==grp %}selected{% endif %}>{{ grp }}</option>
+        {% endif %}
+        {% endfor %}
+    </select>
+</div>
+
+<table class="wiki-table">
+    <thead>
+        <tr>
+            <th>Status</th>
+            <th>Hráč</th>
+            <th>Skupina (Třída)</th>
+            <th>Naposledy viděn</th>
+            <th>Poprvé viděn</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for p in players %}
+        <tr>
+            <td style="text-align: center;">
+                {% if p.is_online %}
+                <span style="color: var(--success); font-size: 20px;">●</span>
+                {% else %}
+                <span style="color: #666; font-size: 20px;">●</span>
+                {% endif %}
+            </td>
+            <td style="display: flex; align-items: center; gap: 10px;">
+                <img src="{{ p.avatar_url }}" width="24" height="24" style="border-radius: 4px;">
+                {{ p.name }}
+            </td>
+            <td>
+                <!-- Inline editace skupiny -->
+                <input type="text" value="{{ p.group }}" hx-post="/api/player/group" hx-vals='{"name": "{{ p.name }}"}'
+                    name="group"
+                    style="background: #222; border: 1px solid #444; color: #ddd; padding: 4px; border-radius: 3px; width: 100px;"
+                    placeholder="Zadejte...">
+            </td>
+            <td style="color: #aaa; font-size: 13px;">{{ p.last_seen }}</td>
+            <td style="color: #666; font-size: 13px;">{{ p.first_seen }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>

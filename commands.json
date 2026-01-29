@@ -1,0 +1,236 @@
+{
+  "commands": [
+    {
+      "id": "kick",
+      "module": "base",
+      "role": "admin",
+      "command": "/kick <hráč> [důvod]",
+      "description": "Vyhodí hráče ze serveru.",
+      "usage": "kick Pepa Vyrušování"
+    },
+    {
+      "id": "ban",
+      "module": "base",
+      "role": "admin",
+      "command": "/ban <hráč> [důvod]",
+      "description": "Trvalý zákaz vstupu.",
+      "usage": "ban Pepa Griefing"
+    },
+    {
+      "id": "pardon",
+      "module": "base",
+      "role": "admin",
+      "command": "/pardon <hráč>",
+      "description": "Zrušení banu.",
+      "usage": "pardon Pepa"
+    },
+    {
+      "id": "op",
+      "module": "base",
+      "role": "admin",
+      "command": "/op <hráč>",
+      "description": "Povýšení na admina.",
+      "usage": "op Jirka"
+    },
+    {
+      "id": "deop",
+      "module": "base",
+      "role": "admin",
+      "command": "/deop <hráč>",
+      "description": "Odebrání admin práv.",
+      "usage": "deop Jirka"
+    },
+    {
+      "id": "msg",
+      "module": "base",
+      "role": "user",
+      "command": "/msg <hráč> <zpráva>",
+      "description": "Soukromá zpráva.",
+      "usage": "msg Pepa Ahoj"
+    },
+    {
+      "id": "spawn",
+      "module": "essentialsx",
+      "role": "user",
+      "command": "/spawn",
+      "description": "Teleport na start.",
+      "usage": "spawn"
+    },
+    {
+      "id": "tpa",
+      "module": "essentialsx",
+      "role": "user",
+      "command": "/tpa <hráč>",
+      "description": "Žádost o teleport.",
+      "usage": "tpa Pepa"
+    },
+    {
+      "id": "tpaccept",
+      "module": "essentialsx",
+      "role": "user",
+      "command": "/tpaccept",
+      "description": "Přijetí teleportu.",
+      "usage": "tpaccept"
+    },
+    {
+      "id": "tp",
+      "module": "essentialsx",
+      "role": "admin",
+      "command": "/tp <hráč1> <hráč2>",
+      "description": "Teleportace hráčů.",
+      "usage": "tp Pepa @p"
+    },
+    {
+      "id": "heal",
+      "module": "essentialsx",
+      "role": "admin",
+      "command": "/heal [hráč]",
+      "description": "Plné zdraví a jídlo.",
+      "usage": "heal"
+    },
+    {
+      "id": "feed",
+      "module": "essentialsx",
+      "role": "admin",
+      "command": "/feed [hráč]",
+      "description": "Doplnění hladu.",
+      "usage": "feed Pepa"
+    },
+    {
+      "id": "fly",
+      "module": "essentialsx",
+      "role": "admin",
+      "command": "/fly [hráč]",
+      "description": "Zapne/vypne létání.",
+      "usage": "fly Pepa"
+    },
+    {
+      "id": "gm_c",
+      "module": "base",
+      "role": "admin",
+      "command": "/gamemode creative",
+      "description": "Kreativní režim.",
+      "usage": "gamemode creative"
+    },
+    {
+      "id": "gm_s",
+      "module": "base",
+      "role": "admin",
+      "command": "/gamemode survival",
+      "description": "Přežití.",
+      "usage": "gamemode survival"
+    },
+    {
+      "id": "we_wand",
+      "module": "worldedit",
+      "role": "admin",
+      "command": "//wand",
+      "description": "Získá editační nástroj.",
+      "usage": "//wand"
+    },
+    {
+      "id": "we_set",
+      "module": "worldedit",
+      "role": "admin",
+      "command": "//set <blok>",
+      "description": "Vyplní výběr bloky.",
+      "usage": "//set grass"
+    },
+    {
+      "id": "we_copy",
+      "module": "worldedit",
+      "role": "admin",
+      "command": "//copy",
+      "description": "Zkopíruje výběr.",
+      "usage": "//copy"
+    },
+    {
+      "id": "we_paste",
+      "module": "worldedit",
+      "role": "admin",
+      "command": "//paste",
+      "description": "Vloží kopii.",
+      "usage": "//paste"
+    },
+    {
+      "id": "we_undo",
+      "module": "worldedit",
+      "role": "admin",
+      "command": "//undo",
+      "description": "Vrátí poslední změnu.",
+      "usage": "//undo"
+    },
+    {
+      "id": "bm_map",
+      "module": "bluemap",
+      "role": "admin",
+      "command": "/bluemap map <mapa> <render/stop>",
+      "description": "Ovládání renderování mapy.",
+      "usage": "/bluemap map world render"
+    },
+    {
+      "id": "bm_freeze",
+      "module": "bluemap",
+      "role": "admin",
+      "command": "/bluemap freeze <mapa>",
+      "description": "Zastaví aktualizace mapy.",
+      "usage": "/bluemap freeze world"
+    },
+    {
+      "id": "bm_update",
+      "module": "bluemap",
+      "role": "admin",
+      "command": "/bluemap update",
+      "description": "Vynutí aktualizaci okolí.",
+      "usage": "/bluemap update"
+    },
+    {
+      "id": "authme_unreg",
+      "module": "authme",
+      "role": "admin",
+      "command": "/authme unregister <hráč>",
+      "description": "Smaže účet (pro reset hesla).",
+      "usage": "authme unregister Pepa"
+    },
+    {
+      "id": "authme_pass",
+      "module": "authme",
+      "role": "admin",
+      "command": "/authme changepassword <hráč> <heslo>",
+      "description": "Změní heslo hráči.",
+      "usage": "authme changepassword Pepa 123456"
+    },
+    {
+      "id": "invsee",
+      "module": "essentialsx",
+      "role": "admin",
+      "command": "/invsee <hráč>",
+      "description": "Otevře inventář hráče.",
+      "usage": "invsee Pepa"
+    },
+    {
+      "id": "top",
+      "module": "essentialsx",
+      "role": "admin",
+      "command": "/top",
+      "description": "Teleport na nejvyšší blok.",
+      "usage": "top"
+    },
+    {
+      "id": "clearinv",
+      "module": "essentialsx",
+      "role": "admin",
+      "command": "/clear [hráč]",
+      "description": "Vymaže inventář.",
+      "usage": "clear Pepa"
+    },
+    {
+      "id": "weather",
+      "module": "base",
+      "role": "admin",
+      "command": "/weather <clear/rain>",
+      "description": "Změna počasí.",
+      "usage": "weather clear"
+    }
+  ]
+}

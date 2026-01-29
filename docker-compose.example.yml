@@ -1,0 +1,57 @@
+services:
+  mc-panel:
+    build: .
+    container_name: mc-server-boss
+    ports:
+      - "5050:5000" # Access panel at http://localhost:5050
+
+    volumes:
+      - ./data:/app/data # Persistent database storage
+
+    environment:
+      # ============================================
+      # Flask Configuration
+      # ============================================
+      - SECRET_KEY=change_this_to_a_random_secure_string
+      - MOCK_MODE=False # Set to True for testing without real server
+
+      # ============================================
+      # RCON Configuration (Required)
+      # ============================================
+      - RCON_PASSWORD=your_rcon_password_here
+      - RCON_HOST=192.168.1.100 # Your Minecraft server IP
+      - RCON_PORT=25575
+      # ============================================
+      # SSH Tunnel (Optional - for remote servers)
+      # ============================================
+      # Uncomment and configure if using SSH tunnel:
+      # - SSH_HOST=your.server.ip
+      # - SSH_PORT=22
+      # - SSH_USER=root
+      # - SSH_PASSWORD=your_ssh_password
+      # - REMOTE_RCON_HOST=127.0.0.1
+
+      # ============================================
+      # Server Paths (Required for SSH features)
+      # ============================================
+      # - MC_LOG_PATH=/path/to/minecraft/logs/latest.log
+      # - MC_SERVER_PATH=/path/to/minecraft/data
+
+      # ============================================
+      # Docker Integration (Optional)
+      # ============================================
+      # - MC_CONTAINER_NAME=minecraft_server
+
+      # ============================================
+      # BlueMap Integration (Optional)
+      # ============================================
+      # - BLUEMAP_URL=http://your.server.ip:8100
+
+    restart: unless-stopped
+
+    networks:
+      - mc-network
+
+networks:
+  mc-network:
+    driver: bridge

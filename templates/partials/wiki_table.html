@@ -1,0 +1,52 @@
+{% if favorites %}
+<h3 class="group-header" style="color: #fbbf24; border-bottom: 2px solid #fbbf24;">⭐ Moje Oblíbené</h3>
+<table class="wiki-table">
+    <tbody>
+        {% for cmd in favorites %}
+        <tr class="wiki-row favorite">
+            <td width="30"><span class="fav-star active" onclick="toggleFavorite('{{ cmd.id }}')">⭐</span></td>
+            <td width="30" title="{{ 'Admin (OP)' if cmd.role == 'admin' else 'Hráč' }}">{{ '🛡️' if cmd.role == 'admin'
+                else '👤' }}</td>
+            <td><code>{{ cmd.command }}</code></td>
+            <td>{{ cmd.description }}</td>
+            <td><code>{{ cmd.usage }}</code></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
+{% for module, cmds in grouped_commands.items() %}
+{% set mod_info = {
+'base': {'name': 'Základní příkazy', 'color': '#94a3b8', 'icon': '📜'},
+'worldedit': {'name': 'WorldEdit', 'color': '#8b5cf6', 'icon': '🏗️'},
+'bluemap': {'name': 'BlueMap', 'color': '#10b981', 'icon': '🗺️'},
+'essentialsx': {'name': 'EssentialsX', 'color': '#3b82f6', 'icon': '💊'},
+'authme': {'name': 'AuthMe', 'color': '#f59e0b', 'icon': '🔐'}
+} %}
+{% set info = mod_info.get(module, {'name': module, 'color': '#666', 'icon': '🔧'}) %}
+
+<h3 class="group-header" style="color: {{ info.color }}; border-bottom: 2px solid {{ info.color }};">
+    {{ info.icon }} {{ info.name }}
+</h3>
+<table class="wiki-table">
+    <tbody>
+        {% for cmd in cmds %}
+        <tr class="wiki-row" style="border-left: 4px solid {{ info.color }};">
+            <td width="30">
+                <span class="fav-star {{ 'active' if cmd.is_favorite else '' }}"
+                    onclick="toggleFavorite('{{ cmd.id }}')">
+                    {{ '⭐' if cmd.is_favorite else '☆' }}
+                </span>
+            </td>
+            <td width="30" title="{{ 'Admin (OP)' if cmd.role == 'admin' else 'Hráč' }}">{{ '🛡️' if cmd.role == 'admin'
+                else '👤' }}</td>
+            <td><code style="color: {{ info.color }};">{{ cmd.command }}</code></td>
+            <td>{{ cmd.description }}</td>
+            <td><code>{{ cmd.usage }}</code></td>
+        </tr>
+
+        {% endfor %}
+    </tbody>
+</table>
+{% endfor %}
